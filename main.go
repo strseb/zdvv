@@ -91,6 +91,9 @@ func main() {
 	// Get TLS config with Let's Encrypt support if needed
 	tlsConfig := cfg.MustGetTLSConfig()
 
+	// Detect if Let's Encrypt (autocert) is being used
+	usingAutocert := tlsConfig.GetCertificate != nil
+
 	// Add HTTP/3 support if enabled
 	if cfg.HTTP3Enabled {
 		// Start HTTP/3 server
@@ -102,7 +105,12 @@ func main() {
 
 		go func() {
 			log.Printf("Starting HTTP/3 server on %s", cfg.Addr)
-			err := h3Server.ListenAndServeTLS(cfg.CertFile, cfg.KeyFile)
+			var err error
+			if usingAutocert {
+				err = h3Server.ListenAndServeTLS("", "")
+			} else {
+				err = h3Server.ListenAndServeTLS(cfg.CertFile, cfg.KeyFile)
+			}
 			if err != nil {
 				log.Printf("HTTP/3 server error: %v", err)
 			}
@@ -132,7 +140,11 @@ func main() {
 
 	// Start the server
 	log.Printf("Starting TLS server on %s", cfg.Addr)
-	err = server.ListenAndServeTLS(cfg.CertFile, cfg.KeyFile)
+	if usingAutocert {
+		err = server.ListenAndServeTLS("", "")
+	} else {
+		err = server.ListenAndServeTLS(cfg.CertFile, cfg.KeyFile)
+	}
 	if err != nil {
 		log.Fatalf("Server error: %v", err)
 	}

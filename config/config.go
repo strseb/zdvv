@@ -2,6 +2,7 @@
 package config
 
 import (
+	"encoding/base64"
 	"flag"
 	"fmt"
 	"log"
@@ -74,7 +75,11 @@ func NewConfig() (*Config, error) {
 				return nil, fmt.Errorf("jwt secret must be provided via -jwt-secret flag or JWT_SECRET environment variable when not in insecure mode")
 			}
 		}
-		cfg.JWTSecret = []byte(jwtSecret)
+		decodedSecret, err := base64.StdEncoding.DecodeString(jwtSecret)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode JWT secret from base64: %v", err)
+		}
+		cfg.JWTSecret = decodedSecret
 	}
 
 	// Handle admin token from flag or environment variable
