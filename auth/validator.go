@@ -37,27 +37,30 @@ type JWTValidator struct {
 	Scheme             string
 	PublicKey          *rsa.PublicKey
 	RevocationSvc      *RevocationService
-	AllowNoneSignature bool // Allow 'none' alg in insecure mode
+	AllowNoneSignature bool             // Allow 'none' alg in insecure mode
+	Permissions        []PermissionFunc // List of permission check functions
 }
 
 // NewJWTValidator creates a new JWT validator
-func NewJWTValidator(publicKey *rsa.PublicKey, revocationSvc *RevocationService) *JWTValidator {
+func NewJWTValidator(publicKey *rsa.PublicKey, revocationSvc *RevocationService, permissions []PermissionFunc) *JWTValidator {
 	return &JWTValidator{
 		Header:        DefaultAuthHeader,
 		Scheme:        DefaultAuthScheme,
 		PublicKey:     publicKey,
 		RevocationSvc: revocationSvc,
+		Permissions:   permissions,
 	}
 }
 
 // NewInsecureJWTValidator creates a JWT validator that allows 'none' algorithm
-func NewInsecureJWTValidator(revocationSvc *RevocationService) *JWTValidator {
+func NewInsecureJWTValidator(revocationSvc *RevocationService, permissions []PermissionFunc) *JWTValidator {
 	return &JWTValidator{
 		Header:             DefaultAuthHeader,
 		Scheme:             DefaultAuthScheme,
 		PublicKey:          nil, // Not needed for 'none'
 		RevocationSvc:      revocationSvc,
 		AllowNoneSignature: true,
+		Permissions:        permissions,
 	}
 }
 
@@ -84,7 +87,6 @@ func (v *JWTValidator) ValidateToken(tokenStr string) (*jwt.Token, error) {
 		token, _, err := parser.ParseUnverified(tokenStr, jwt.MapClaims{})
 		if err == nil && token.Method.Alg() == "none" {
 			token.Valid = true
-			// Extract the jti claim to check for revocation
 			if claims, ok := token.Claims.(jwt.MapClaims); ok {
 				if jti, ok := claims["jti"].(string); ok {
 					if v.RevocationSvc.IsRevoked(jti) {
@@ -93,13 +95,18 @@ func (v *JWTValidator) ValidateToken(tokenStr string) (*jwt.Token, error) {
 				} else {
 					return nil, errors.New("token missing jti claim")
 				}
+				// Check permissions
+				for _, perm := range v.Permissions {
+					if err := perm(claims); err != nil {
+						return nil, err
+					}
+				}
 			}
 			return token, nil
 		}
 	}
 
 	token, err := jwt.Parse(tokenStr, func(token *jwt.Token) (interface{}, error) {
-		// Validate the signing method
 		if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
@@ -114,7 +121,6 @@ func (v *JWTValidator) ValidateToken(tokenStr string) (*jwt.Token, error) {
 		return nil, ErrInvalidToken
 	}
 
-	// Extract the jti claim to check for revocation
 	if claims, ok := token.Claims.(jwt.MapClaims); ok {
 		if jti, ok := claims["jti"].(string); ok {
 			if v.RevocationSvc.IsRevoked(jti) {
@@ -122,6 +128,12 @@ func (v *JWTValidator) ValidateToken(tokenStr string) (*jwt.Token, error) {
 			}
 		} else {
 			return nil, errors.New("token missing jti claim")
+		}
+		// Check permissions
+		for _, perm := range v.Permissions {
+			if err := perm(claims); err != nil {
+				return nil, err
+			}
 		}
 	}
 

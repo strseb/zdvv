@@ -61,13 +61,15 @@ func main() {
 	var proxyAuthenticator auth.Authenticator
 	var adminAuthenticator auth.Authenticator
 
+	requiredConnectPermissions := []auth.PermissionFunc{auth.PermissionConnectTCP}
+
 	if cfg.Insecure {
 		// Use JWTValidator with AllowNoneSignature in insecure mode
-		proxyAuthenticator = auth.NewInsecureJWTValidator(revocationSvc)
+		proxyAuthenticator = auth.NewInsecureJWTValidator(revocationSvc, requiredConnectPermissions)
 		adminAuthenticator = auth.NewInsecureAdminAuthenticator()
 	} else {
 		// Create JWT validator for proxy and admin authenticator
-		jwtValidator := auth.NewJWTValidator(cfg.JWTPublicKey, revocationSvc)
+		jwtValidator := auth.NewJWTValidator(cfg.JWTPublicKey, revocationSvc, requiredConnectPermissions)
 		proxyAuthenticator = jwtValidator // JWTValidator already implements Authenticator interface
 		adminAuthenticator = auth.NewStandardAdminAuthenticator(cfg.AdminToken)
 	}

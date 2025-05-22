@@ -21,10 +21,11 @@ func main() {
 	if *insecure {
 		// Generate an unsigned JWT (alg: none)
 		token := jwt.NewWithClaims(jwt.SigningMethodNone, jwt.MapClaims{
-			"sub": "test-user",
-			"jti": "test-token-id-123",
-			"iat": time.Now().Unix(),
-			"exp": time.Now().Add(24 * time.Hour).Unix(),
+			"sub":         "test-user",
+			"jti":         "test-token-id-123",
+			"iat":         time.Now().Unix(),
+			"exp":         time.Now().Add(24 * time.Hour).Unix(),
+			"connect-tcp": true,
 		})
 		tokenString, err := token.SignedString(jwt.UnsafeAllowNoneSignatureType)
 		if err != nil {
@@ -62,10 +63,11 @@ func main() {
 
 	// Create a test JWT token
 	token := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
-		"sub": "test-user",
-		"jti": "test-token-id-123",
-		"iat": time.Now().Unix(),
-		"exp": time.Now().Add(24 * time.Hour).Unix(),
+		"sub":         "test-user",
+		"jti":         "test-token-id-123",
+		"iat":         time.Now().Unix(),
+		"exp":         time.Now().Add(24 * time.Hour).Unix(),
+		"connect-tcp": true,
 	})
 
 	// Sign the token with the private key
