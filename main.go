@@ -67,7 +67,7 @@ func main() {
 		adminAuthenticator = auth.NewInsecureAdminAuthenticator()
 	} else {
 		// Create JWT validator for proxy and admin authenticator
-		jwtValidator := auth.NewJWTValidator(cfg.JWTSecret, revocationSvc)
+		jwtValidator := auth.NewJWTValidator(cfg.JWTPublicKey, revocationSvc)
 		proxyAuthenticator = jwtValidator // JWTValidator already implements Authenticator interface
 		adminAuthenticator = auth.NewStandardAdminAuthenticator(cfg.AdminToken)
 	}

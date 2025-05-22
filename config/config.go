@@ -2,7 +2,9 @@
 package config
 
 import (
-	"encoding/base64"
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/pem"
 	"flag"
 	"fmt"
 	"log"
@@ -19,9 +21,9 @@ type Config struct {
 	Hostname     string // Hostname for TLS certificate and Let's Encrypt
 
 	// Authentication settings
-	JWTSecret  []byte
-	AdminToken string
-	Insecure   bool
+	JWTPublicKey *rsa.PublicKey
+	AdminToken   string
+	Insecure     bool
 
 	// Protocol support
 	HTTP2Enabled bool
@@ -52,7 +54,7 @@ func NewConfig() (*Config, error) {
 	flag.StringVar(&cfg.KeyFile, "key", cfg.KeyFile, "TLS key file")
 	flag.StringVar(&cfg.Hostname, "hostname", "", "Hostname for TLS certificate (required for Let's Encrypt)")
 
-	jwtSecretFlag := flag.String("jwt-secret", "", "JWT secret key")
+	jwtPublicKeyFlag := flag.String("jwt-public-key", "", "JWT public key (PEM-encoded)")
 	adminTokenFlag := flag.String("admin-token", "", "Admin API token")
 
 	disableHTTP2 := flag.Bool("no-http2", false, "Disable HTTP/2 support")
@@ -66,20 +68,33 @@ func NewConfig() (*Config, error) {
 	cfg.HTTP2Enabled = !*disableHTTP2
 	cfg.HTTP3Enabled = !*disableHTTP3
 
-	// Handle JWT secret from flag or environment variable
-	jwtSecret := *jwtSecretFlag
+	// Handle JWT public key from flag or environment variable
+	var pubKeyPath string
 	if !cfg.Insecure {
-		if jwtSecret == "" {
-			jwtSecret = os.Getenv("JWT_SECRET")
-			if jwtSecret == "" {
-				return nil, fmt.Errorf("jwt secret must be provided via -jwt-secret flag or JWT_SECRET environment variable when not in insecure mode")
+		pubKeyPath = *jwtPublicKeyFlag
+		if pubKeyPath == "" {
+			pubKeyPath = os.Getenv("JWT_PUBLIC_KEY")
+			if pubKeyPath == "" {
+				return nil, fmt.Errorf("JWT public key file path must be provided via -jwt-public-key flag or JWT_PUBLIC_KEY environment variable when not in insecure mode")
 			}
 		}
-		decodedSecret, err := base64.StdEncoding.DecodeString(jwtSecret)
+		pemBytes, err := os.ReadFile(pubKeyPath)
 		if err != nil {
-			return nil, fmt.Errorf("failed to decode JWT secret from base64: %v", err)
+			return nil, fmt.Errorf("failed to read JWT public key file: %v", err)
 		}
-		cfg.JWTSecret = decodedSecret
+		block, _ := pem.Decode(pemBytes)
+		if block == nil || block.Type != "PUBLIC KEY" {
+			return nil, fmt.Errorf("failed to decode JWT public key PEM block")
+		}
+		parsedKey, err := x509.ParsePKIXPublicKey(block.Bytes)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse JWT public key: %v", err)
+		}
+		var ok bool
+		cfg.JWTPublicKey, ok = parsedKey.(*rsa.PublicKey)
+		if !ok {
+			return nil, fmt.Errorf("JWT public key is not an RSA public key")
+		}
 	}
 
 	// Handle admin token from flag or environment variable
@@ -112,8 +127,8 @@ func (c *Config) LogSettings() {
 	} else {
 		log.Println("Running in secure mode with JWT authentication")
 		// Don't log secret values, but confirm they're set
-		if len(c.JWTSecret) > 0 {
-			log.Println("JWT secret: [SET]")
+		if c.JWTPublicKey != nil {
+			log.Println("JWT public key: [SET]")
 		}
 		if c.AdminToken != "" {
 			log.Println("Admin token: [SET]")

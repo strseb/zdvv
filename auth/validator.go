@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"crypto/rsa"
 	"errors"
 	"fmt"
 	"net/http"
@@ -34,17 +35,17 @@ type Authenticator interface {
 type JWTValidator struct {
 	Header             string
 	Scheme             string
-	Secret             []byte
+	PublicKey          *rsa.PublicKey
 	RevocationSvc      *RevocationService
 	AllowNoneSignature bool // Allow 'none' alg in insecure mode
 }
 
 // NewJWTValidator creates a new JWT validator
-func NewJWTValidator(secret []byte, revocationSvc *RevocationService) *JWTValidator {
+func NewJWTValidator(publicKey *rsa.PublicKey, revocationSvc *RevocationService) *JWTValidator {
 	return &JWTValidator{
 		Header:        DefaultAuthHeader,
 		Scheme:        DefaultAuthScheme,
-		Secret:        secret,
+		PublicKey:     publicKey,
 		RevocationSvc: revocationSvc,
 	}
 }
@@ -54,7 +55,7 @@ func NewInsecureJWTValidator(revocationSvc *RevocationService) *JWTValidator {
 	return &JWTValidator{
 		Header:             DefaultAuthHeader,
 		Scheme:             DefaultAuthScheme,
-		Secret:             nil, // No secret needed for 'none'
+		PublicKey:          nil, // Not needed for 'none'
 		RevocationSvc:      revocationSvc,
 		AllowNoneSignature: true,
 	}
@@ -77,18 +78,32 @@ func (v *JWTValidator) ExtractToken(r *http.Request) (string, error) {
 
 // ValidateToken validates the JWT token and returns the token
 func (v *JWTValidator) ValidateToken(tokenStr string) (*jwt.Token, error) {
-	token, err := jwt.Parse(tokenStr, func(token *jwt.Token) (interface{}, error) {
-		// Allow 'none' algorithm if enabled
-		if v.AllowNoneSignature {
-			if token.Method.Alg() == "none" {
-				return nil, nil // Accept unsigned tokens
+	if v.AllowNoneSignature {
+		// Parse header to check alg before full parsing
+		parser := jwt.NewParser()
+		token, _, err := parser.ParseUnverified(tokenStr, jwt.MapClaims{})
+		if err == nil && token.Method.Alg() == "none" {
+			token.Valid = true
+			// Extract the jti claim to check for revocation
+			if claims, ok := token.Claims.(jwt.MapClaims); ok {
+				if jti, ok := claims["jti"].(string); ok {
+					if v.RevocationSvc.IsRevoked(jti) {
+						return nil, ErrTokenRevoked
+					}
+				} else {
+					return nil, errors.New("token missing jti claim")
+				}
 			}
+			return token, nil
 		}
+	}
+
+	token, err := jwt.Parse(tokenStr, func(token *jwt.Token) (interface{}, error) {
 		// Validate the signing method
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+		if _, ok := token.Method.(*jwt.SigningMethodRSA); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
-		return v.Secret, nil
+		return v.PublicKey, nil
 	})
 
 	if err != nil {
@@ -102,7 +117,6 @@ func (v *JWTValidator) ValidateToken(tokenStr string) (*jwt.Token, error) {
 	// Extract the jti claim to check for revocation
 	if claims, ok := token.Claims.(jwt.MapClaims); ok {
 		if jti, ok := claims["jti"].(string); ok {
-			// Check if the token has been revoked
 			if v.RevocationSvc.IsRevoked(jti) {
 				return nil, ErrTokenRevoked
 			}
