@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"strings"
 
@@ -33,10 +32,11 @@ type Authenticator interface {
 
 // JWTValidator validates JWT tokens from HTTP requests
 type JWTValidator struct {
-	Header        string
-	Scheme        string
-	Secret        []byte
-	RevocationSvc *RevocationService
+	Header             string
+	Scheme             string
+	Secret             []byte
+	RevocationSvc      *RevocationService
+	AllowNoneSignature bool // Allow 'none' alg in insecure mode
 }
 
 // NewJWTValidator creates a new JWT validator
@@ -46,6 +46,17 @@ func NewJWTValidator(secret []byte, revocationSvc *RevocationService) *JWTValida
 		Scheme:        DefaultAuthScheme,
 		Secret:        secret,
 		RevocationSvc: revocationSvc,
+	}
+}
+
+// NewInsecureJWTValidator creates a JWT validator that allows 'none' algorithm
+func NewInsecureJWTValidator(revocationSvc *RevocationService) *JWTValidator {
+	return &JWTValidator{
+		Header:             DefaultAuthHeader,
+		Scheme:             DefaultAuthScheme,
+		Secret:             nil, // No secret needed for 'none'
+		RevocationSvc:      revocationSvc,
+		AllowNoneSignature: true,
 	}
 }
 
@@ -67,6 +78,12 @@ func (v *JWTValidator) ExtractToken(r *http.Request) (string, error) {
 // ValidateToken validates the JWT token and returns the token
 func (v *JWTValidator) ValidateToken(tokenStr string) (*jwt.Token, error) {
 	token, err := jwt.Parse(tokenStr, func(token *jwt.Token) (interface{}, error) {
+		// Allow 'none' algorithm if enabled
+		if v.AllowNoneSignature {
+			if token.Method.Alg() == "none" {
+				return nil, nil // Accept unsigned tokens
+			}
+		}
 		// Validate the signing method
 		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
@@ -116,22 +133,5 @@ func (v *JWTValidator) Middleware(next http.Handler) http.Handler {
 		ctx := r.Context()
 		ctx = context.WithValue(ctx, "token", token)
 		next.ServeHTTP(w, r.WithContext(ctx))
-	})
-}
-
-// InsecureValidator is a validator that always passes authentication
-type InsecureValidator struct{}
-
-// NewInsecureValidator creates a new insecure validator
-func NewInsecureValidator() *InsecureValidator {
-	log.Println("WARNING: Using insecure validator - all requests will be allowed without authentication")
-	return &InsecureValidator{}
-}
-
-// Middleware is a pass-through for insecure validator
-func (v *InsecureValidator) Middleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Always pass through in insecure mode
-		next.ServeHTTP(w, r)
 	})
 }

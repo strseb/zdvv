@@ -62,8 +62,8 @@ func main() {
 	var adminAuthenticator auth.Authenticator
 
 	if cfg.Insecure {
-		// Use insecure authenticators in insecure mode
-		proxyAuthenticator = auth.NewProxyInsecureAuthenticator()
+		// Use JWTValidator with AllowNoneSignature in insecure mode
+		proxyAuthenticator = auth.NewInsecureJWTValidator(revocationSvc)
 		adminAuthenticator = auth.NewInsecureAdminAuthenticator()
 	} else {
 		// Create JWT validator for proxy and admin authenticator
