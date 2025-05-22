@@ -5,7 +5,6 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/basti/zdvv/admin"
 	"github.com/basti/zdvv/auth"
 	"github.com/basti/zdvv/config"
 	"github.com/basti/zdvv/proxy"
@@ -59,23 +58,19 @@ func main() {
 
 	// Determine which authenticators to use
 	var proxyAuthenticator auth.Authenticator
-	var adminAuthenticator auth.Authenticator
 
 	requiredConnectPermissions := []auth.PermissionFunc{auth.PermissionConnectTCP}
 
 	if cfg.Insecure {
 		// Use JWTValidator with AllowNoneSignature in insecure mode
 		proxyAuthenticator = auth.NewInsecureJWTValidator(revocationSvc, requiredConnectPermissions)
-		adminAuthenticator = auth.NewInsecureAdminAuthenticator()
 	} else {
-		// Create JWT validator for proxy and admin authenticator
+		// Create JWT validator for proxy
 		jwtValidator := auth.NewJWTValidator(cfg.JWTPublicKey, revocationSvc, requiredConnectPermissions)
 		proxyAuthenticator = jwtValidator // JWTValidator already implements Authenticator interface
-		adminAuthenticator = auth.NewStandardAdminAuthenticator(cfg.AdminToken)
 	}
 
 	// Create handlers with the appropriate authenticators
-	adminHandler := admin.NewAdminHandler(adminAuthenticator, revocationSvc)
 	connectHandler := proxy.NewConnectHandler()
 
 	// Wrap connect handler with authentication middleware
@@ -83,9 +78,6 @@ func main() {
 
 	// Set up HTTP mux
 	mux := http.NewServeMux()
-
-	// Set up admin routes
-	adminHandler.SetupRoutes(mux)
 
 	// Create the main router with authenticated connect handler
 	mainRouter := newMainRouter(mux, authenticatedConnectHandler)
