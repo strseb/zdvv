@@ -2,14 +2,13 @@ package main
 
 import (
 	"crypto/tls"
-	"flag"
 	"fmt"
 	"log"
 	"net/http"
-	"os"
 
 	"github.com/basti/zdvv/admin"
 	"github.com/basti/zdvv/auth"
+	"github.com/basti/zdvv/config"
 	"github.com/basti/zdvv/proxy"
 	"github.com/quic-go/quic-go/http3"
 )
@@ -26,19 +25,6 @@ const (
  Zentrale Datenverkehrsvermittlung  (Build %s)
  Abteilung ZDVV steht bereit.                     
 `
-
-	version = "1.0.0"
-)
-
-var (
-	addr         = flag.String("addr", ":8443", "Listen address")
-	certFile     = flag.String("cert", "server.crt", "TLS certificate file")
-	keyFile      = flag.String("key", "server.key", "TLS key file")
-	jwtSecret    = flag.String("jwt-secret", "", "JWT secret key")
-	adminToken   = flag.String("admin-token", "", "Admin API token")
-	disableHTTP2 = flag.Bool("no-http2", false, "Disable HTTP/2 support")
-	disableHTTP3 = flag.Bool("no-http3", false, "Disable HTTP/3 support")
-	insecure     = flag.Bool("insecure", false, "Skip JWT authentication (insecure mode)")
 )
 
 // newMainRouter creates a new http.Handler that routes CONNECT requests
@@ -57,48 +43,34 @@ func newMainRouter(defaultHandler http.Handler, connectHandler http.Handler) htt
 }
 
 func main() {
-	flag.Parse()
+	// Load configuration
+	cfg, err := config.NewConfig()
+	if err != nil {
+		log.Fatalf("Configuration error: %v", err)
+	}
 
 	// Print banner
-	fmt.Printf(asciiArt, version)
+	fmt.Printf(asciiArt, cfg.Version)
 
-	// Print warning if insecure mode is enabled
-	if *insecure {
-		log.Println("WARNING: Running in insecure mode - authentication disabled")
-	} // Initialize services
-	revocationSvc := auth.NewRevocationService() // Determine which authenticators to use
+	// Log configuration settings
+	cfg.LogSettings()
+
+	// Initialize services
+	revocationSvc := auth.NewRevocationService()
+
+	// Determine which authenticators to use
 	var proxyAuthenticator auth.Authenticator
 	var adminAuthenticator auth.Authenticator
 
-	if *insecure {
+	if cfg.Insecure {
 		// Use insecure authenticators in insecure mode
 		proxyAuthenticator = auth.NewProxyInsecureAuthenticator()
 		adminAuthenticator = auth.NewInsecureAdminAuthenticator()
 	} else {
-		// In secure mode, require JWT secret and admin token
-		secret := []byte(*jwtSecret)
-		if len(secret) == 0 {
-			envSecret := os.Getenv("JWT_SECRET")
-			if envSecret == "" {
-				log.Fatal("JWT secret must be provided via -jwt-secret flag or JWT_SECRET environment variable when not in insecure mode")
-			}
-			secret = []byte(envSecret)
-		}
-
-		// Get admin token from flag or environment variable
-		adminTokenValue := *adminToken
-		if adminTokenValue == "" {
-			envToken := os.Getenv("ADMIN_TOKEN")
-			if envToken == "" {
-				log.Fatal("Admin token must be provided via -admin-token flag or ADMIN_TOKEN environment variable when not in insecure mode")
-			}
-			adminTokenValue = envToken
-		}
-
 		// Create JWT validator for proxy and admin authenticator
-		jwtValidator := auth.NewJWTValidator(secret, revocationSvc)
+		jwtValidator := auth.NewJWTValidator(cfg.JWTSecret, revocationSvc)
 		proxyAuthenticator = jwtValidator // JWTValidator already implements Authenticator interface
-		adminAuthenticator = auth.NewStandardAdminAuthenticator(adminTokenValue)
+		adminAuthenticator = auth.NewStandardAdminAuthenticator(cfg.AdminToken)
 	}
 
 	// Create handlers with the appropriate authenticators
@@ -107,6 +79,7 @@ func main() {
 
 	// Wrap connect handler with authentication middleware
 	authenticatedConnectHandler := proxyAuthenticator.Middleware(connectHandler)
+
 	// Set up HTTP mux
 	mux := http.NewServeMux()
 
@@ -121,50 +94,45 @@ func main() {
 		MinVersion: tls.VersionTLS12,
 		NextProtos: []string{"http/1.1"},
 	}
-	// Add HTTP/2 support unless disabled
-	if !*disableHTTP2 {
+
+	// Add HTTP/2 support if enabled
+	if cfg.HTTP2Enabled {
 		tlsConfig.NextProtos = append(tlsConfig.NextProtos, "h2")
-		log.Printf("HTTP/2 support enabled")
-	} else {
-		log.Printf("HTTP/2 support disabled")
 	}
-	// Add HTTP/3 support unless disabled
-	if !*disableHTTP3 {
+
+	// Add HTTP/3 support if enabled
+	if cfg.HTTP3Enabled {
 		tlsConfig.NextProtos = append(tlsConfig.NextProtos, "h3")
-		log.Printf("HTTP/3 support enabled")
 
 		// Start HTTP/3 server
 		h3Server := &http3.Server{
-			Addr:      *addr,
+			Addr:      cfg.Addr,
 			Handler:   mainRouter, // Use mainRouter
 			TLSConfig: tlsConfig,
 		}
 
 		go func() {
-			log.Printf("Starting HTTP/3 server on %s", *addr)
-			err := h3Server.ListenAndServeTLS(*certFile, *keyFile)
+			log.Printf("Starting HTTP/3 server on %s", cfg.Addr)
+			err := h3Server.ListenAndServeTLS(cfg.CertFile, cfg.KeyFile)
 			if err != nil {
 				log.Printf("HTTP/3 server error: %v", err)
 			}
 		}()
-	} else {
-		log.Printf("HTTP/3 support disabled")
 	}
 
 	// Configure HTTP/1.1 and HTTP/2 server
 	server := &http.Server{
-		Addr:      *addr,
+		Addr:      cfg.Addr,
 		Handler:   mainRouter, // Use mainRouter
 		TLSConfig: tlsConfig,
 	}
 
 	// If insecure mode is enabled, also start an unencrypted HTTP server on port 8080
-	if *insecure {
+	if cfg.Insecure {
 		go func() {
-			insecureAddr := ":8080"
-			log.Printf("WARNING: Starting unencrypted HTTP server on %s due to -insecure flag", insecureAddr)
+			log.Printf("WARNING: Starting unencrypted HTTP server on %s due to -insecure flag", cfg.InsecureAddr)
 			insecureServer := &http.Server{
-				Addr:    insecureAddr,
+				Addr:    cfg.InsecureAddr,
 				Handler: mainRouter, // Use the same mainRouter
 			}
 			if err := insecureServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -173,13 +141,9 @@ func main() {
 		}()
 	}
 
-	// Start the server with the enabled protocols
-	protocols := "HTTP/1.1"
-	if !*disableHTTP2 {
-		protocols += " and HTTP/2"
-	}
-	log.Printf("Starting %s server on %s", protocols, *addr)
-	err := server.ListenAndServeTLS(*certFile, *keyFile)
+	// Start the server
+	log.Printf("Starting TLS server on %s", cfg.Addr)
+	err = server.ListenAndServeTLS(cfg.CertFile, cfg.KeyFile)
 	if err != nil {
 		log.Fatalf("Server error: %v", err)
 	}
