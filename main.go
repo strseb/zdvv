@@ -1,7 +1,6 @@
 package main
 
 import (
-	"crypto/tls"
 	"fmt"
 	"log"
 	"net/http"
@@ -89,21 +88,11 @@ func main() {
 	// Create the main router with authenticated connect handler
 	mainRouter := newMainRouter(mux, authenticatedConnectHandler)
 
-	// Set up TLS config with protocol support
-	tlsConfig := &tls.Config{
-		MinVersion: tls.VersionTLS12,
-		NextProtos: []string{"http/1.1"},
-	}
-
-	// Add HTTP/2 support if enabled
-	if cfg.HTTP2Enabled {
-		tlsConfig.NextProtos = append(tlsConfig.NextProtos, "h2")
-	}
+	// Get TLS config with Let's Encrypt support if needed
+	tlsConfig := cfg.MustGetTLSConfig()
 
 	// Add HTTP/3 support if enabled
 	if cfg.HTTP3Enabled {
-		tlsConfig.NextProtos = append(tlsConfig.NextProtos, "h3")
-
 		// Start HTTP/3 server
 		h3Server := &http3.Server{
 			Addr:      cfg.Addr,

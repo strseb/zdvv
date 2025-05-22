@@ -5,6 +5,7 @@ go 1.24.0
 require (
 	github.com/golang-jwt/jwt/v5 v5.2.2
 	github.com/quic-go/quic-go v0.52.0
+	golang.org/x/crypto v0.38.0
 )
 
 require (
@@ -14,7 +15,6 @@ require (
 	github.com/quic-go/qpack v0.5.1 // indirect
 	go.uber.org/automaxprocs v1.6.0 // indirect
 	go.uber.org/mock v0.5.2 // indirect
-	golang.org/x/crypto v0.38.0 // indirect
 	golang.org/x/mod v0.24.0 // indirect
 	golang.org/x/net v0.40.0 // indirect
 	golang.org/x/sync v0.14.0 // indirect

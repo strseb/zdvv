@@ -15,6 +15,7 @@ type Config struct {
 	CertFile     string
 	KeyFile      string
 	InsecureAddr string // Used when running in insecure mode
+	Hostname     string // Hostname for TLS certificate and Let's Encrypt
 
 	// Authentication settings
 	JWTSecret  []byte
@@ -33,7 +34,7 @@ type Config struct {
 func NewConfig() (*Config, error) {
 	// Default configuration
 	cfg := &Config{
-		Addr:         ":8443",
+		Addr:         ":443",
 		CertFile:     "server.crt",
 		KeyFile:      "server.key",
 		InsecureAddr: ":8080",
@@ -41,12 +42,14 @@ func NewConfig() (*Config, error) {
 		HTTP3Enabled: true,
 		Insecure:     false,
 		Version:      "1.0.0",
+		Hostname:     "",
 	}
 
 	// Define command line flags
 	flag.StringVar(&cfg.Addr, "addr", cfg.Addr, "Listen address")
 	flag.StringVar(&cfg.CertFile, "cert", cfg.CertFile, "TLS certificate file")
 	flag.StringVar(&cfg.KeyFile, "key", cfg.KeyFile, "TLS key file")
+	flag.StringVar(&cfg.Hostname, "hostname", "", "Hostname for TLS certificate (required for Let's Encrypt)")
 
 	jwtSecretFlag := flag.String("jwt-secret", "", "JWT secret key")
 	adminTokenFlag := flag.String("admin-token", "", "Admin API token")
@@ -68,7 +71,7 @@ func NewConfig() (*Config, error) {
 		if jwtSecret == "" {
 			jwtSecret = os.Getenv("JWT_SECRET")
 			if jwtSecret == "" {
-				return nil, fmt.Errorf("JWT secret must be provided via -jwt-secret flag or JWT_SECRET environment variable when not in insecure mode")
+				return nil, fmt.Errorf("jwt secret must be provided via -jwt-secret flag or JWT_SECRET environment variable when not in insecure mode")
 			}
 		}
 		cfg.JWTSecret = []byte(jwtSecret)
@@ -80,7 +83,7 @@ func NewConfig() (*Config, error) {
 		if adminToken == "" {
 			adminToken = os.Getenv("ADMIN_TOKEN")
 			if adminToken == "" {
-				return nil, fmt.Errorf("Admin token must be provided via -admin-token flag or ADMIN_TOKEN environment variable when not in insecure mode")
+				return nil, fmt.Errorf("admin token must be provided via -admin-token flag or ADMIN_TOKEN environment variable when not in insecure mode")
 			}
 		}
 		cfg.AdminToken = adminToken
@@ -94,6 +97,9 @@ func (c *Config) LogSettings() {
 	log.Printf("Server address: %s", c.Addr)
 	log.Printf("TLS certificate file: %s", c.CertFile)
 	log.Printf("TLS key file: %s", c.KeyFile)
+	if c.Hostname != "" {
+		log.Printf("Server hostname: %s", c.Hostname)
+	}
 
 	if c.Insecure {
 		log.Println("WARNING: Running in insecure mode - authentication disabled")
