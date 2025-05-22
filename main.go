@@ -30,32 +30,47 @@ const (
 )
 
 var (
-	addr        = flag.String("addr", ":8443", "Listen address")
-	certFile    = flag.String("cert", "server.crt", "TLS certificate file")
-	keyFile     = flag.String("key", "server.key", "TLS key file")
-	jwtSecret   = flag.String("jwt-secret", "", "JWT secret key")
-	adminToken  = flag.String("admin-token", "", "Admin API token")
+	addr         = flag.String("addr", ":8443", "Listen address")
+	certFile     = flag.String("cert", "server.crt", "TLS certificate file")
+	keyFile      = flag.String("key", "server.key", "TLS key file")
+	jwtSecret    = flag.String("jwt-secret", "", "JWT secret key")
+	adminToken   = flag.String("admin-token", "", "Admin API token")
 	disableHTTP2 = flag.Bool("no-http2", false, "Disable HTTP/2 support")
 	disableHTTP3 = flag.Bool("no-http3", false, "Disable HTTP/3 support")
-	insecure    = flag.Bool("insecure", false, "Skip JWT authentication (insecure mode)")
+	insecure     = flag.Bool("insecure", false, "Skip JWT authentication (insecure mode)")
 )
+
+// newMainRouter creates a new http.Handler that routes CONNECT requests
+// directly to the connectHandler and all other requests to the defaultHandler (mux).
+func newMainRouter(defaultHandler http.Handler, connectHandler http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		log.Printf("[MainRouter] Received request: Method=%s, URL=%s, Host=%s, RemoteAddr=%s", r.Method, r.URL.String(), r.Host, r.RemoteAddr)
+		if r.Method == http.MethodConnect {
+			log.Printf("[MainRouter] Routing to ConnectHandler for: %s %s", r.Method, r.URL.Host)
+			connectHandler.ServeHTTP(w, r)
+		} else {
+			log.Printf("[MainRouter] Routing to default MUX for: %s %s", r.Method, r.URL.Path)
+			defaultHandler.ServeHTTP(w, r)
+		}
+	})
+}
 
 func main() {
 	flag.Parse()
 
 	// Print banner
 	fmt.Printf(asciiArt, version)
-	
+
 	// Print warning if insecure mode is enabled
 	if *insecure {
 		log.Println("WARNING: Running in insecure mode - authentication disabled")
-	}	// Initialize services
+	} // Initialize services
 	revocationSvc := auth.NewRevocationService()
-	
+
 	// Determine which validator to use
 	var tokenValidator auth.TokenValidator
 	var adminAuthenticator auth.AdminAuthenticator
-	
+
 	if *insecure {
 		// Use insecure validator and authenticator in insecure mode
 		tokenValidator = auth.NewInsecureValidator()
@@ -70,7 +85,7 @@ func main() {
 			}
 			secret = []byte(envSecret)
 		}
-		
+
 		// Get admin token from flag or environment variable
 		adminTokenValue := *adminToken
 		if adminTokenValue == "" {
@@ -80,23 +95,28 @@ func main() {
 			}
 			adminTokenValue = envToken
 		}
-		
+
 		// Create standard JWT validator and admin authenticator
 		tokenValidator = auth.NewJWTValidator(secret, revocationSvc)
 		adminAuthenticator = auth.NewStandardAdminAuthenticator(adminTokenValue)
 	}
-	
+
 	adminHandler := auth.NewAdminHandler(adminAuthenticator, revocationSvc)
 	connectHandler := proxy.NewConnectHandler(tokenValidator)
 
 	// Set up HTTP mux
 	mux := http.NewServeMux()
-	
+
 	// Set up admin routes
 	adminHandler.SetupRoutes(mux)
-	
-	// Set up proxy handler (handles CONNECT method)
-	mux.Handle("/", connectHandler)	// Set up TLS config with protocol support
+
+	// connectHandler will be invoked by newMainRouter for CONNECT requests
+	// mux.Handle("CONNECT */*", connectHandler) // This line is now removed/handled by newMainRouter
+
+	// Create the main router
+	mainRouter := newMainRouter(mux, connectHandler)
+
+	// Set up TLS config with protocol support
 	tlsConfig := &tls.Config{
 		MinVersion: tls.VersionTLS12,
 		NextProtos: []string{"http/1.1"},
@@ -112,19 +132,20 @@ func main() {
 	if !*disableHTTP3 {
 		tlsConfig.NextProtos = append(tlsConfig.NextProtos, "h3")
 		log.Printf("HTTP/3 support enabled")
-		
+
 		// Start HTTP/3 server
 		h3Server := &http3.Server{
 			Addr:      *addr,
-			Handler:   mux,
+			Handler:   mainRouter, // Use mainRouter
 			TLSConfig: tlsConfig,
 		}
-		
+
 		go func() {
 			log.Printf("Starting HTTP/3 server on %s", *addr)
 			err := h3Server.ListenAndServeTLS(*certFile, *keyFile)
 			if err != nil {
-				log.Printf("HTTP/3 server error: %v", err)			}
+				log.Printf("HTTP/3 server error: %v", err)
+			}
 		}()
 	} else {
 		log.Printf("HTTP/3 support disabled")
@@ -133,9 +154,26 @@ func main() {
 	// Configure HTTP/1.1 and HTTP/2 server
 	server := &http.Server{
 		Addr:      *addr,
-		Handler:   mux,
+		Handler:   mainRouter, // Use mainRouter
 		TLSConfig: tlsConfig,
-	}	// Start the server with the enabled protocols
+	}
+
+	// If insecure mode is enabled, also start an unencrypted HTTP server on port 8080
+	if *insecure {
+		go func() {
+			insecureAddr := ":8080"
+			log.Printf("WARNING: Starting unencrypted HTTP server on %s due to -insecure flag", insecureAddr)
+			insecureServer := &http.Server{
+				Addr:    insecureAddr,
+				Handler: mainRouter, // Use the same mainRouter
+			}
+			if err := insecureServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				log.Printf("Unencrypted HTTP server error: %v", err)
+			}
+		}()
+	}
+
+	// Start the server with the enabled protocols
 	protocols := "HTTP/1.1"
 	if !*disableHTTP2 {
 		protocols += " and HTTP/2"

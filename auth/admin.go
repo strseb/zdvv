@@ -117,7 +117,7 @@ func (h *AdminHandler) handleRevokeToken(w http.ResponseWriter, r *http.Request)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{
-		"status": "success",
+		"status":  "success",
 		"message": "Token revoked",
 	})
 }
@@ -129,5 +129,8 @@ func (h *AdminHandler) HandleRevokeToken() http.Handler {
 
 // SetupRoutes configures the admin API routes
 func (h *AdminHandler) SetupRoutes(mux *http.ServeMux) {
+	if mux == nil {
+		return
+	}
 	mux.Handle("/revoke", h.HandleRevokeToken())
 }

@@ -25,6 +25,7 @@ func NewConnectHandler(validator auth.TokenValidator) *ConnectHandler {
 
 // handleConnect handles the CONNECT proxy operation after authentication
 func (h *ConnectHandler) handleConnect(w http.ResponseWriter, r *http.Request) {
+	log.Printf("ConnectHandler.handleConnect: Entered for Method=%s, URL.Host=%s, URL.Path=[%s], RequestURI=[%s]", r.Method, r.URL.Host, r.URL.Path, r.RequestURI) // DEBUG LINE
 	// Only handle CONNECT requests
 	if r.Method != http.MethodConnect {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -88,6 +89,7 @@ func (h *ConnectHandler) handleConnect(w http.ResponseWriter, r *http.Request) {
 
 // ServeHTTP handles HTTP CONNECT requests with authentication
 func (h *ConnectHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	log.Printf("ConnectHandler.ServeHTTP: Received request: Method=%s, URL=%s, Path=[%s], Host=%s, RequestURI=[%s]", r.Method, r.URL.String(), r.URL.Path, r.Host, r.RequestURI) // DEBUG LINE
 	// Use the validator middleware to handle authentication
 	authHandler := h.Validator.Middleware(http.HandlerFunc(h.handleConnect))
 	authHandler.ServeHTTP(w, r)
