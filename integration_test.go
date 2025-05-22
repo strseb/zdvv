@@ -24,14 +24,12 @@ func TestProxyIntegration(t *testing.T) {
 	defer echoServer.Close()
 	// Get the host:port from the server URL
 	echoHost := strings.TrimPrefix(echoServer.URL, "http://")
-
 	// Create a new revocation service
 	revocationSvc := auth.NewRevocationService()
-
 	// Create JWT secret and authenticator
 	secret := []byte("integration-test-secret")
 	adminToken := "integration-admin-token"
-	tokenValidator := auth.NewJWTValidator(secret, revocationSvc)
+	jwtValidator := auth.NewJWTValidator(secret, revocationSvc)
 	adminAuthenticator := auth.NewStandardAdminAuthenticator(adminToken)
 
 	// Setup handlers
@@ -48,7 +46,7 @@ func TestProxyIntegration(t *testing.T) {
 		}
 
 		// Apply authentication middleware
-		authHandler := tokenValidator.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {			// Connect to the target server (our echo server)
+		authHandler := jwtValidator.Middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { // Connect to the target server (our echo server)
 			targetConn, err := net.Dial("tcp", echoHost)
 			if err != nil {
 				http.Error(w, "Failed to connect to target server", http.StatusBadGateway)
@@ -140,11 +138,11 @@ func TestProxyIntegration(t *testing.T) {
 	})
 
 	t.Run("CONNECT proxy with valid token", func(t *testing.T) {
-	// Setup a client for testing the proxy would be done here
-	// This is skipped as we're not performing this part of the test
+		// Setup a client for testing the proxy would be done here
+		// This is skipped as we're not performing this part of the test
 
-	// Create a request to the echo server via the proxy
-	req, err := http.NewRequest("GET", "http://"+echoHost, strings.NewReader("test payload"))
+		// Create a request to the echo server via the proxy
+		req, err := http.NewRequest("GET", "http://"+echoHost, strings.NewReader("test payload"))
 		if err != nil {
 			t.Fatalf("Failed to create request: %v", err)
 		}
@@ -155,7 +153,7 @@ func TestProxyIntegration(t *testing.T) {
 		// Due to limitations in testing a CONNECT proxy, we can't fully automate this test
 		// as it would require a real network connection. In a real environment, this would
 		// test that the proxy correctly forwards the connection to the target server.
-		
+
 		t.Skip("Skipping full CONNECT proxy test as it requires a real network connection")
 	})
 }
@@ -178,7 +176,7 @@ func setupEchoServer(t *testing.T) *httptest.Server {
 		w.Header().Set("Content-Type", "text/plain")
 		fmt.Fprintf(w, "Method: %s\n", r.Method)
 		fmt.Fprintf(w, "Path: %s\n", r.URL.Path)
-		
+
 		// Echo back the headers
 		fmt.Fprintln(w, "Headers:")
 		for name, values := range r.Header {
@@ -186,7 +184,7 @@ func setupEchoServer(t *testing.T) *httptest.Server {
 				fmt.Fprintf(w, "%s: %s\n", name, value)
 			}
 		}
-		
+
 		// Echo back the body
 		if r.Body != nil {
 			body, err := io.ReadAll(r.Body)

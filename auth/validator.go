@@ -25,8 +25,8 @@ var (
 	ErrTokenRevoked  = errors.New("token has been revoked")
 )
 
-// TokenValidator is the interface for validating tokens from HTTP requests
-type TokenValidator interface {
+// Authenticator defines the interface for authentication middleware
+type Authenticator interface {
 	// Middleware provides HTTP middleware for authentication
 	Middleware(next http.Handler) http.Handler
 }
@@ -64,7 +64,7 @@ func (v *JWTValidator) ExtractToken(r *http.Request) (string, error) {
 	return parts[1], nil
 }
 
-// ValidateToken validates the JWT token
+// ValidateToken validates the JWT token and returns the token
 func (v *JWTValidator) ValidateToken(tokenStr string) (*jwt.Token, error) {
 	token, err := jwt.Parse(tokenStr, func(token *jwt.Token) (interface{}, error) {
 		// Validate the signing method

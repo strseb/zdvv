@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/basti/zdvv/admin"
 	"github.com/basti/zdvv/auth"
 	"github.com/basti/zdvv/proxy"
 	"github.com/quic-go/quic-go/http3"
@@ -65,15 +66,13 @@ func main() {
 	if *insecure {
 		log.Println("WARNING: Running in insecure mode - authentication disabled")
 	} // Initialize services
-	revocationSvc := auth.NewRevocationService()
-
-	// Determine which validator to use
-	var tokenValidator auth.TokenValidator
-	var adminAuthenticator auth.AdminAuthenticator
+	revocationSvc := auth.NewRevocationService() // Determine which authenticators to use
+	var proxyAuthenticator auth.Authenticator
+	var adminAuthenticator auth.Authenticator
 
 	if *insecure {
-		// Use insecure validator and authenticator in insecure mode
-		tokenValidator = auth.NewInsecureValidator()
+		// Use insecure authenticators in insecure mode
+		proxyAuthenticator = auth.NewProxyInsecureAuthenticator()
 		adminAuthenticator = auth.NewInsecureAdminAuthenticator()
 	} else {
 		// In secure mode, require JWT secret and admin token
@@ -96,25 +95,26 @@ func main() {
 			adminTokenValue = envToken
 		}
 
-		// Create standard JWT validator and admin authenticator
-		tokenValidator = auth.NewJWTValidator(secret, revocationSvc)
+		// Create JWT validator for proxy and admin authenticator
+		jwtValidator := auth.NewJWTValidator(secret, revocationSvc)
+		proxyAuthenticator = jwtValidator // JWTValidator already implements Authenticator interface
 		adminAuthenticator = auth.NewStandardAdminAuthenticator(adminTokenValue)
 	}
 
-	adminHandler := auth.NewAdminHandler(adminAuthenticator, revocationSvc)
-	connectHandler := proxy.NewConnectHandler(tokenValidator)
+	// Create handlers with the appropriate authenticators
+	adminHandler := admin.NewAdminHandler(adminAuthenticator, revocationSvc)
+	connectHandler := proxy.NewConnectHandler()
 
+	// Wrap connect handler with authentication middleware
+	authenticatedConnectHandler := proxyAuthenticator.Middleware(connectHandler)
 	// Set up HTTP mux
 	mux := http.NewServeMux()
 
 	// Set up admin routes
 	adminHandler.SetupRoutes(mux)
 
-	// connectHandler will be invoked by newMainRouter for CONNECT requests
-	// mux.Handle("CONNECT */*", connectHandler) // This line is now removed/handled by newMainRouter
-
-	// Create the main router
-	mainRouter := newMainRouter(mux, connectHandler)
+	// Create the main router with authenticated connect handler
+	mainRouter := newMainRouter(mux, authenticatedConnectHandler)
 
 	// Set up TLS config with protocol support
 	tlsConfig := &tls.Config{

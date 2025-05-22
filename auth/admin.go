@@ -7,10 +7,9 @@ import (
 	"strings"
 )
 
-// AdminAuthenticator defines the interface for admin authentication
+// AdminAuthenticator implements the Authenticator interface for admin authentication
 type AdminAuthenticator interface {
-	// Middleware provides HTTP middleware for admin authentication
-	Middleware(next http.Handler) http.Handler
+	Authenticator
 }
 
 // StandardAdminAuthenticator implements admin authentication using a token

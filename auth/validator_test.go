@@ -14,12 +14,12 @@ func createTestToken(t *testing.T, secret []byte, jti string) string {
 		"sub": "test-user",
 		"jti": jti,
 	})
-	
+
 	tokenString, err := token.SignedString(secret)
 	if err != nil {
 		t.Fatalf("Error creating test token: %v", err)
 	}
-	
+
 	return tokenString
 }
 
@@ -27,14 +27,14 @@ func TestJWTValidatorExtractToken(t *testing.T) {
 	secret := []byte("test-secret")
 	revocationSvc := NewRevocationService()
 	validator := NewJWTValidator(secret, revocationSvc)
-	
+
 	// Test cases
 	tests := []struct {
-		name           string
-		header         string
-		headerValue    string
-		expectedError  error
-		expectedToken  string
+		name          string
+		header        string
+		headerValue   string
+		expectedError error
+		expectedToken string
 	}{
 		{
 			name:          "No header",
@@ -56,21 +56,21 @@ func TestJWTValidatorExtractToken(t *testing.T) {
 			expectedToken: "token123",
 		},
 	}
-	
+
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			req := httptest.NewRequest("GET", "/", nil)
 			if tc.header != "" {
 				req.Header.Add(tc.header, tc.headerValue)
 			}
-			
+
 			token, err := validator.ExtractToken(req)
-			
+
 			// Check error
 			if err != tc.expectedError {
 				t.Fatalf("Expected error %v, got %v", tc.expectedError, err)
 			}
-			
+
 			// If we expected success, check the token
 			if tc.expectedError == nil && token != tc.expectedToken {
 				t.Fatalf("Expected token %s, got %s", tc.expectedToken, token)
@@ -83,20 +83,20 @@ func TestJWTValidatorValidateToken(t *testing.T) {
 	secret := []byte("test-secret")
 	revocationSvc := NewRevocationService()
 	validator := NewJWTValidator(secret, revocationSvc)
-	
+
 	// Create a valid token
 	validJTI := "valid-token-id"
 	validToken := createTestToken(t, secret, validJTI)
-	
+
 	// Create a token with invalid signature
 	invalidToken := createTestToken(t, []byte("wrong-secret"), validJTI)
-	
+
 	// Create a token without JTI
 	tokenWithoutJTI := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"sub": "test-user",
 	})
 	tokenWithoutJTIString, _ := tokenWithoutJTI.SignedString(secret)
-	
+
 	// Test cases
 	tests := []struct {
 		name          string
@@ -135,20 +135,19 @@ func TestJWTValidatorValidateToken(t *testing.T) {
 			shouldBeValid: false,
 		},
 	}
-	
+
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			// Reset revocation service for each test
 			revocationSvc = NewRevocationService()
 			validator = NewJWTValidator(secret, revocationSvc)
-			
+
 			// Revoke token if needed for this test
 			if tc.revokeFirst {
 				revocationSvc.Revoke(validJTI)
 			}
-			
 			token, err := validator.ValidateToken(tc.tokenString)
-			
+
 			if tc.shouldBeValid {
 				if err != nil {
 					t.Fatalf("Expected valid token, got error: %v", err)
@@ -169,26 +168,26 @@ func TestJWTValidatorMiddleware(t *testing.T) {
 	secret := []byte("test-secret")
 	revocationSvc := NewRevocationService()
 	validator := NewJWTValidator(secret, revocationSvc)
-	
+
 	// Create a valid token
 	validJTI := "valid-token-id"
 	validToken := createTestToken(t, secret, validJTI)
-	
+
 	// Create a handler to verify middleware passes control
 	handlerCalled := false
 	nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handlerCalled = true
 	})
-	
+
 	// Apply middleware
 	handler := validator.Middleware(nextHandler)
-	
+
 	// Test cases
 	tests := []struct {
-		name          string
-		token         string
-		shouldPass    bool
-		expectedCode  int
+		name         string
+		token        string
+		shouldPass   bool
+		expectedCode int
 	}{
 		{
 			name:         "Valid token",
@@ -203,33 +202,33 @@ func TestJWTValidatorMiddleware(t *testing.T) {
 			expectedCode: http.StatusUnauthorized,
 		},
 	}
-	
+
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			// Reset state
 			handlerCalled = false
-			
+
 			// Create request
 			req := httptest.NewRequest("GET", "/", nil)
 			if tc.token != "" {
 				req.Header.Add("Proxy-Authorization", "Bearer "+tc.token)
 			}
-			
+
 			// Create response recorder
 			rr := httptest.NewRecorder()
-			
+
 			// Call handler
 			handler.ServeHTTP(rr, req)
-			
+
 			// Check if next handler was called
 			if tc.shouldPass && !handlerCalled {
 				t.Fatal("Expected next handler to be called")
 			}
-			
+
 			if !tc.shouldPass && handlerCalled {
 				t.Fatal("Expected next handler not to be called")
 			}
-			
+
 			// Check status code
 			if rr.Code != tc.expectedCode {
 				t.Fatalf("Expected status code %d, got %d", tc.expectedCode, rr.Code)

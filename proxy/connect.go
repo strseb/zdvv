@@ -7,20 +7,16 @@ import (
 	"net"
 	"net/http"
 	"time"
-
-	"github.com/basti/zdvv/auth"
 )
 
 // ConnectHandler implements the HTTP CONNECT proxy
 type ConnectHandler struct {
-	Validator auth.TokenValidator
+	// No longer stores a validator reference
 }
 
 // NewConnectHandler creates a new CONNECT proxy handler
-func NewConnectHandler(validator auth.TokenValidator) *ConnectHandler {
-	return &ConnectHandler{
-		Validator: validator,
-	}
+func NewConnectHandler() *ConnectHandler {
+	return &ConnectHandler{}
 }
 
 // handleConnect handles the CONNECT proxy operation after authentication
@@ -87,10 +83,9 @@ func (h *ConnectHandler) handleConnect(w http.ResponseWriter, r *http.Request) {
 	log.Printf("Proxy connection to %s closed", host)
 }
 
-// ServeHTTP handles HTTP CONNECT requests with authentication
+// ServeHTTP handles HTTP CONNECT requests (authentication is handled externally now)
 func (h *ConnectHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	log.Printf("ConnectHandler.ServeHTTP: Received request: Method=%s, URL=%s, Path=[%s], Host=%s, RequestURI=[%s]", r.Method, r.URL.String(), r.URL.Path, r.Host, r.RequestURI) // DEBUG LINE
-	// Use the validator middleware to handle authentication
-	authHandler := h.Validator.Middleware(http.HandlerFunc(h.handleConnect))
-	authHandler.ServeHTTP(w, r)
+	// Directly handle CONNECT without authentication
+	h.handleConnect(w, r)
 }
