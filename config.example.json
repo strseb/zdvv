@@ -12,10 +12,7 @@
   },  "Args": {
     "addr": ":8443",
     "cert": "server.crt",
-    "key": "server.key",
-    "insecure": "${INSECURE:-false}",
-    "no-http2": "${NO_HTTP2:-false}",
-    "no-http3": "${NO_HTTP3:-false}"
+    "key": "server.key"
   },
   "ManifestPassthrough": {
     "name": "zdvv",

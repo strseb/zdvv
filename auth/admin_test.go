@@ -11,21 +11,21 @@ import (
 func TestStandardAdminAuthenticator(t *testing.T) {
 	adminToken := "test-admin-token"
 	authenticator := NewStandardAdminAuthenticator(adminToken)
-	
+
 	// Create a handler to verify middleware passes control
 	handlerCalled := false
 	nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handlerCalled = true
 	})
-	
+
 	// Apply middleware
 	handler := authenticator.Middleware(nextHandler)
-	
+
 	tests := []struct {
-		name          string
-		headerValue   string
-		shouldPass    bool
-		expectedCode  int
+		name         string
+		headerValue  string
+		shouldPass   bool
+		expectedCode int
 	}{
 		{
 			name:         "Valid admin token",
@@ -52,33 +52,33 @@ func TestStandardAdminAuthenticator(t *testing.T) {
 			expectedCode: http.StatusUnauthorized,
 		},
 	}
-	
+
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			// Reset state
 			handlerCalled = false
-			
+
 			// Create request
 			req := httptest.NewRequest("GET", "/", nil)
 			if tc.headerValue != "" {
 				req.Header.Add("Authorization", tc.headerValue)
 			}
-			
+
 			// Create response recorder
 			rr := httptest.NewRecorder()
-			
+
 			// Call handler
 			handler.ServeHTTP(rr, req)
-			
+
 			// Check if next handler was called
 			if tc.shouldPass && !handlerCalled {
 				t.Fatal("Expected next handler to be called")
 			}
-			
+
 			if !tc.shouldPass && handlerCalled {
 				t.Fatal("Expected next handler not to be called")
 			}
-			
+
 			// Check status code
 			if rr.Code != tc.expectedCode {
 				t.Fatalf("Expected status code %d, got %d", tc.expectedCode, rr.Code)
@@ -89,16 +89,16 @@ func TestStandardAdminAuthenticator(t *testing.T) {
 
 func TestInsecureAdminAuthenticator(t *testing.T) {
 	authenticator := NewInsecureAdminAuthenticator()
-	
+
 	// Create a handler to verify middleware always passes control
 	handlerCalled := false
 	nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handlerCalled = true
 	})
-	
+
 	// Apply middleware
 	handler := authenticator.Middleware(nextHandler)
-	
+
 	tests := []struct {
 		name        string
 		headerValue string
@@ -112,29 +112,29 @@ func TestInsecureAdminAuthenticator(t *testing.T) {
 			headerValue: "Bearer any-token",
 		},
 	}
-	
+
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			// Reset state
 			handlerCalled = false
-			
+
 			// Create request
 			req := httptest.NewRequest("GET", "/", nil)
 			if tc.headerValue != "" {
 				req.Header.Add("Authorization", tc.headerValue)
 			}
-			
+
 			// Create response recorder
 			rr := httptest.NewRecorder()
-			
+
 			// Call handler
 			handler.ServeHTTP(rr, req)
-			
+
 			// Insecure authenticator should always pass
 			if !handlerCalled {
 				t.Fatal("Expected insecure authenticator to always pass to next handler")
 			}
-			
+
 			// Check status code
 			if rr.Code != http.StatusOK {
 				t.Fatalf("Expected status code %d, got %d", http.StatusOK, rr.Code)
@@ -148,23 +148,23 @@ func TestAdminHandler(t *testing.T) {
 	revocationSvc := NewRevocationService()
 	authenticator := NewStandardAdminAuthenticator(adminToken)
 	handler := NewAdminHandler(authenticator, revocationSvc)
-	
+
 	// Setup test mux
 	mux := http.NewServeMux()
 	handler.SetupRoutes(mux)
-	
+
 	// Create test server
 	server := httptest.NewServer(mux)
 	defer server.Close()
-	
+
 	// Test cases for token revocation
 	tests := []struct {
-		name          string
-		method        string
-		path          string
-		headerValue   string
-		payload       RevokeRequest
-		expectedCode  int
+		name         string
+		method       string
+		path         string
+		headerValue  string
+		payload      RevokeRequest
+		expectedCode int
 	}{
 		{
 			name:         "Revoke token with valid auth",
@@ -198,7 +198,7 @@ func TestAdminHandler(t *testing.T) {
 			expectedCode: http.StatusMethodNotAllowed,
 		},
 	}
-	
+
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			// Create request
@@ -206,12 +206,12 @@ func TestAdminHandler(t *testing.T) {
 			if tc.method == "POST" {
 				json.NewEncoder(&body).Encode(tc.payload)
 			}
-			
+
 			req, err := http.NewRequest(tc.method, server.URL+tc.path, &body)
 			if err != nil {
 				t.Fatalf("Error creating request: %v", err)
 			}
-			
+
 			// Set headers
 			if tc.headerValue != "" {
 				req.Header.Set("Authorization", tc.headerValue)
@@ -219,19 +219,19 @@ func TestAdminHandler(t *testing.T) {
 			if tc.method == "POST" {
 				req.Header.Set("Content-Type", "application/json")
 			}
-			
+
 			// Send request
 			resp, err := http.DefaultClient.Do(req)
 			if err != nil {
 				t.Fatalf("Error sending request: %v", err)
 			}
 			defer resp.Body.Close()
-			
+
 			// Check status code
 			if resp.StatusCode != tc.expectedCode {
 				t.Fatalf("Expected status code %d, got %d", tc.expectedCode, resp.StatusCode)
 			}
-			
+
 			// If it was a successful revocation, verify token is actually revoked
 			if tc.expectedCode == http.StatusOK && tc.payload.JTI != "" {
 				if !revocationSvc.IsRevoked(tc.payload.JTI) {

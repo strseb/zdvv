@@ -89,7 +89,7 @@ func TestGenerateToken(t *testing.T) {
 		if !expTime.After(time.Now()) {
 			t.Errorf("Token expiration %v is not in the future", expTime)
 		}
-		
+
 		// Token should expire in approximately 24 hours
 		expectedExp := time.Now().Add(24 * time.Hour)
 		diff := expectedExp.Sub(expTime)
@@ -110,9 +110,9 @@ func TestTokenGenerationPerformance(t *testing.T) {
 	oldStdout := os.Stdout
 	nullFile, _ := os.Open(os.DevNull)
 	os.Stdout = nullFile
-	defer func() { 
+	defer func() {
 		os.Stdout = oldStdout
-		nullFile.Close() 
+		nullFile.Close()
 	}()
 
 	// Measure the time to generate 100 tokens
@@ -126,7 +126,7 @@ func TestTokenGenerationPerformance(t *testing.T) {
 	duration := time.Since(startTime)
 	avgTime := duration / iterations
 
-	t.Logf("Generated %d tokens in %v (average %v per token)", 
+	t.Logf("Generated %d tokens in %v (average %v per token)",
 		iterations, duration, avgTime)
 
 	// Ensure generation time is reasonable
@@ -136,7 +136,7 @@ func TestTokenGenerationPerformance(t *testing.T) {
 }
 
 // TestTokenOutputFormat ensures the token is properly formatted in the output
-func TestTokenOutputFormat(t *testing.T) {	// Capture stdout
+func TestTokenOutputFormat(t *testing.T) { // Capture stdout
 	oldStdout := os.Stdout
 	r, w, _ := os.Pipe()
 	os.Stdout = w
@@ -146,12 +146,12 @@ func TestTokenOutputFormat(t *testing.T) {	// Capture stdout
 	main()
 	// Generate token
 	main()
-	
+
 	// Read output
 	w.Close()
 	bytes, _ := io.ReadAll(r)
 	output := string(bytes)
-	
+
 	// Check output format
 	if !strings.Contains(output, "Test JWT Token:") {
 		t.Errorf("Output doesn't contain expected header: %s", output)

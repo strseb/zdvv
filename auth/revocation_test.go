@@ -52,11 +52,11 @@ func TestRevocationService(t *testing.T) {
 func TestRevocationServiceConcurrency(t *testing.T) {
 	// This test ensures the RevocationService is safe for concurrent use
 	svc := NewRevocationService()
-	
+
 	// Create a large number of tokens to revoke concurrently
 	tokenCount := 100
 	done := make(chan bool)
-	
+
 	// Revoke tokens concurrently
 	for i := 0; i < tokenCount; i++ {
 		go func(idx int) {
@@ -65,12 +65,12 @@ func TestRevocationServiceConcurrency(t *testing.T) {
 			done <- true
 		}(i)
 	}
-	
+
 	// Wait for all goroutines to complete
 	for i := 0; i < tokenCount; i++ {
 		<-done
 	}
-	
+
 	// Check if all tokens are revoked and the list has the expected length
 	revokedList := svc.GetRevokedList()
 	if len(revokedList) != tokenCount {

@@ -36,11 +36,11 @@ func (s *RevocationService) IsRevoked(jti string) bool {
 func (s *RevocationService) GetRevokedList() []string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	
+
 	revokedList := make([]string, 0, len(s.revokedTokens))
 	for jti := range s.revokedTokens {
 		revokedList = append(revokedList, jti)
 	}
-	
+
 	return revokedList
 }
