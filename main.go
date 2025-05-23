@@ -1,12 +1,17 @@
 package main
 
 import (
+	"crypto/rsa"
+	"crypto/x509"
+	"encoding/pem"
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/basti/zdvv/auth"
 	"github.com/basti/zdvv/config"
+	"github.com/basti/zdvv/controlserver"
 	"github.com/basti/zdvv/proxy"
 	"github.com/quic-go/quic-go/http3"
 )
@@ -53,21 +58,70 @@ func main() {
 	// Log configuration settings
 	cfg.LogSettings()
 
-	// Initialize services
-	revocationSvc := auth.NewRevocationService()
+	// Control server integration
+	var revocationSvc interface{ IsRevoked(string) bool }
+	var jwtPublicKeyPEM string
+	var controlClient *controlserver.Client
 
-	// Determine which authenticators to use
-	var proxyAuthenticator auth.Authenticator
+	if cfg.ControlServerURL != "" && cfg.ControlServerSecret != "" {
+		controlClient = controlserver.NewClient(cfg.ControlServerURL, cfg.ControlServerSecret, cfg.Hostname)
+		if err := controlClient.FetchPublicKey(); err != nil {
+			log.Fatalf("Failed to fetch public key from control server: %v", err)
+		}
+		jwtPublicKeyPEM = controlClient.GetPublicKeyPEM()
+		// Register on startup
+		if err := controlClient.RegisterServer(); err != nil {
+			log.Fatalf("Failed to register with control server: %v", err)
+		}
+		// Deregister on shutdown
+		defer func() {
+			if err := controlClient.DeregisterServer(); err != nil {
+				log.Printf("Failed to deregister from control server: %v", err)
+			}
+		}()
+		// Periodically fetch revocations
+		go func() {
+			for {
+				if err := controlClient.FetchRevoked(); err != nil {
+					log.Printf("Failed to fetch revoked tokens: %v", err)
+				}
+				time.Sleep(30 * time.Minute)
+			}
+		}()
+		revocationSvc = controlClient.GetRevocationService()
+	} else {
+		revocationSvc = auth.NewRevocationService()
+		jwtPublicKeyPEM = ""
+	}
+
+	// Parse the public key PEM (from control server or config)
+	var jwtPublicKey *rsa.PublicKey
+	if jwtPublicKeyPEM != "" {
+		block, _ := pem.Decode([]byte(jwtPublicKeyPEM))
+		if block == nil || block.Type != "PUBLIC KEY" {
+			log.Fatalf("Failed to decode JWT public key PEM block from control server")
+		}
+		parsedKey, err := x509.ParsePKIXPublicKey(block.Bytes)
+		if err != nil {
+			log.Fatalf("Failed to parse JWT public key from control server: %v", err)
+		}
+		var ok bool
+		jwtPublicKey, ok = parsedKey.(*rsa.PublicKey)
+		if !ok {
+			log.Fatalf("JWT public key from control server is not an RSA public key")
+		}
+	} else {
+		jwtPublicKey = cfg.JWTPublicKey
+	}
 
 	requiredConnectPermissions := []auth.PermissionFunc{auth.PermissionConnectTCP}
 
+	var proxyAuthenticator auth.Authenticator
+
 	if cfg.Insecure {
-		// Use JWTValidator with AllowNoneSignature in insecure mode
-		proxyAuthenticator = auth.NewInsecureJWTValidator(revocationSvc, requiredConnectPermissions)
+		proxyAuthenticator = auth.NewInsecureJWTValidator(revocationSvc.(*auth.RevocationService), requiredConnectPermissions)
 	} else {
-		// Create JWT validator for proxy
-		jwtValidator := auth.NewJWTValidator(cfg.JWTPublicKey, revocationSvc, requiredConnectPermissions)
-		proxyAuthenticator = jwtValidator // JWTValidator already implements Authenticator interface
+		proxyAuthenticator = auth.NewJWTValidator(jwtPublicKey, revocationSvc.(*auth.RevocationService), requiredConnectPermissions)
 	}
 
 	// Create handlers with the appropriate authenticators

@@ -31,6 +31,10 @@ type Config struct {
 
 	// Version information
 	Version string
+
+	// Control server settings
+	ControlServerURL    string
+	ControlServerSecret string
 }
 
 // NewConfig creates and returns a new Config struct with values from flags and environment variables
@@ -53,6 +57,8 @@ func NewConfig() (*Config, error) {
 	flag.StringVar(&cfg.CertFile, "cert", cfg.CertFile, "TLS certificate file")
 	flag.StringVar(&cfg.KeyFile, "key", cfg.KeyFile, "TLS key file")
 	flag.StringVar(&cfg.Hostname, "hostname", "", "Hostname for TLS certificate (required for Let's Encrypt)")
+	flag.StringVar(&cfg.ControlServerURL, "control-server", "", "Control server base URL (https://host:port)")
+	flag.StringVar(&cfg.ControlServerSecret, "control-server-shared-secret", "", "Control server shared secret (for Bearer auth)")
 
 	jwtPublicKeyFlag := flag.String("jwt-public-key", "", "JWT public key (PEM-encoded)")
 	adminTokenFlag := flag.String("admin-token", "", "Admin API token")
@@ -107,6 +113,14 @@ func NewConfig() (*Config, error) {
 			}
 		}
 		cfg.AdminToken = adminToken
+	}
+
+	// Handle control server settings from flag or environment variable
+	if cfg.ControlServerURL == "" {
+		cfg.ControlServerURL = os.Getenv("CONTROL_SERVER")
+	}
+	if cfg.ControlServerSecret == "" {
+		cfg.ControlServerSecret = os.Getenv("CONTROL_SERVER_SHARED_SECRET")
 	}
 
 	return cfg, nil
