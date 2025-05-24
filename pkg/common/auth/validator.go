@@ -37,12 +37,12 @@ type JWTValidator struct {
 	Scheme             string
 	PublicKey          *rsa.PublicKey
 	RevocationSvc      *RevocationService
-	AllowNoneSignature bool             // Allow 'none' alg in insecure mode
-	Permissions        []PermissionFunc // List of permission check functions
+	AllowNoneSignature bool         // Allow 'none' alg in insecure mode
+	Permissions        []Permission // List of permission check functions
 }
 
 // NewJWTValidator creates a new JWT validator
-func NewJWTValidator(publicKey *rsa.PublicKey, revocationSvc *RevocationService, permissions []PermissionFunc) *JWTValidator {
+func NewJWTValidator(publicKey *rsa.PublicKey, revocationSvc *RevocationService, permissions []Permission) *JWTValidator {
 	return &JWTValidator{
 		Header:        DefaultAuthHeader,
 		Scheme:        DefaultAuthScheme,
@@ -53,7 +53,7 @@ func NewJWTValidator(publicKey *rsa.PublicKey, revocationSvc *RevocationService,
 }
 
 // NewInsecureJWTValidator creates a JWT validator that allows 'none' algorithm
-func NewInsecureJWTValidator(revocationSvc *RevocationService, permissions []PermissionFunc) *JWTValidator {
+func NewInsecureJWTValidator(revocationSvc *RevocationService, permissions []Permission) *JWTValidator {
 	return &JWTValidator{
 		Header:             DefaultAuthHeader,
 		Scheme:             DefaultAuthScheme,
@@ -97,8 +97,8 @@ func (v *JWTValidator) ValidateToken(tokenStr string) (*jwt.Token, error) {
 				}
 				// Check permissions
 				for _, perm := range v.Permissions {
-					if err := perm(claims); err != nil {
-						return nil, err
+					if !perm.Check(claims) {
+						return nil, errors.New("missing required permission: " + string(perm))
 					}
 				}
 			}
@@ -131,8 +131,8 @@ func (v *JWTValidator) ValidateToken(tokenStr string) (*jwt.Token, error) {
 		}
 		// Check permissions
 		for _, perm := range v.Permissions {
-			if err := perm(claims); err != nil {
-				return nil, err
+			if !perm.Check(claims) {
+				return nil, errors.New("missing required permission: " + string(perm))
 			}
 		}
 	}

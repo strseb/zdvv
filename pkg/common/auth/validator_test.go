@@ -1,6 +1,8 @@
 package auth
 
 import (
+	"crypto/rand"
+	"crypto/rsa"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -8,25 +10,44 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
-// Helper function to create a new valid JWT token
-func createTestToken(t *testing.T, secret []byte, jti string) string {
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+// Helper function to create a new valid JWT token signed with RSA
+func createTestToken(t *testing.T, jti string) (string, *rsa.PublicKey) {
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("Error generating RSA private key: %v", err)
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
 		"sub": "test-user",
 		"jti": jti,
 	})
 
-	tokenString, err := token.SignedString(secret)
+	tokenString, err := token.SignedString(privateKey)
 	if err != nil {
 		t.Fatalf("Error creating test token: %v", err)
 	}
 
+	return tokenString, &privateKey.PublicKey
+}
+
+// Helper function to create a token signed with a specific private key
+func createTokenWithKey(t *testing.T, privateKey *rsa.PrivateKey, jti string) string {
+	token := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
+		"sub": "test-user",
+		"jti": jti,
+	})
+	tokenString, err := token.SignedString(privateKey)
+	if err != nil {
+		t.Fatalf("Error creating test token with key: %v", err)
+	}
 	return tokenString
 }
 
 func TestJWTValidatorExtractToken(t *testing.T) {
-	secret := []byte("test-secret")
+	// Generate a dummy public key for validator initialization, as this test doesn't validate the signature.
+	_, publicKey := createTestToken(t, "dummy-jti-for-extract")
 	revocationSvc := NewRevocationService()
-	validator := NewJWTValidator(secret, revocationSvc)
+	validator := NewJWTValidator(publicKey, revocationSvc, nil)
 
 	// Test cases
 	tests := []struct {
@@ -80,22 +101,29 @@ func TestJWTValidatorExtractToken(t *testing.T) {
 }
 
 func TestJWTValidatorValidateToken(t *testing.T) {
-	secret := []byte("test-secret")
-	revocationSvc := NewRevocationService()
-	validator := NewJWTValidator(secret, revocationSvc)
+	// Create a key pair for valid tokens
+	validPrivateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("Error generating RSA private key: %v", err)
+	}
+	validPublicKey := &validPrivateKey.PublicKey
 
 	// Create a valid token
 	validJTI := "valid-token-id"
-	validToken := createTestToken(t, secret, validJTI)
+	validToken := createTokenWithKey(t, validPrivateKey, validJTI)
 
-	// Create a token with invalid signature
-	invalidToken := createTestToken(t, []byte("wrong-secret"), validJTI)
+	// Create a token with invalid signature (signed by a different key)
+	invalidPrivateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("Error generating another RSA private key: %v", err)
+	}
+	invalidToken := createTokenWithKey(t, invalidPrivateKey, "invalid-sig-jti")
 
-	// Create a token without JTI
-	tokenWithoutJTI := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+	// Create a token without JTI, signed with the valid key
+	tokenWithoutJTI := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
 		"sub": "test-user",
 	})
-	tokenWithoutJTIString, _ := tokenWithoutJTI.SignedString(secret)
+	tokenWithoutJTIString, _ := tokenWithoutJTI.SignedString(validPrivateKey)
 
 	// Test cases
 	tests := []struct {
@@ -138,15 +166,15 @@ func TestJWTValidatorValidateToken(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			// Reset revocation service for each test
-			revocationSvc = NewRevocationService()
-			validator = NewJWTValidator(secret, revocationSvc)
+			// Reset revocation service and validator for each test, ensuring correct public key
+			currentRevocationSvc := NewRevocationService()
+			currentValidator := NewJWTValidator(validPublicKey, currentRevocationSvc, nil)
 
 			// Revoke token if needed for this test
 			if tc.revokeFirst {
-				revocationSvc.Revoke(validJTI)
+				currentRevocationSvc.Revoke(validJTI) // Assuming validJTI is the one to revoke
 			}
-			token, err := validator.ValidateToken(tc.tokenString)
+			token, err := currentValidator.ValidateToken(tc.tokenString)
 
 			if tc.shouldBeValid {
 				if err != nil {
@@ -165,22 +193,23 @@ func TestJWTValidatorValidateToken(t *testing.T) {
 }
 
 func TestJWTValidatorMiddleware(t *testing.T) {
-	secret := []byte("test-secret")
-	revocationSvc := NewRevocationService()
-	validator := NewJWTValidator(secret, revocationSvc)
+
+	// Create a key pair for valid tokens
+	validPrivateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("Error generating RSA private key: %v", err)
+	}
+	validPublicKey := &validPrivateKey.PublicKey
 
 	// Create a valid token
-	validJTI := "valid-token-id"
-	validToken := createTestToken(t, secret, validJTI)
+	validJTI := "valid-token-id-middleware"
+	validToken := createTokenWithKey(t, validPrivateKey, validJTI)
 
 	// Create a handler to verify middleware passes control
 	handlerCalled := false
 	nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		handlerCalled = true
 	})
-
-	// Apply middleware
-	handler := validator.Middleware(nextHandler)
 
 	// Test cases
 	tests := []struct {
@@ -207,6 +236,13 @@ func TestJWTValidatorMiddleware(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// Reset state
 			handlerCalled = false
+			// Ensure a fresh revocation service for each sub-test if necessary,
+			// though for this specific middleware test, it might not be strictly needed
+			// unless testing revocation within middleware.
+			// For consistency with ValidateToken test:
+			currentRevocationSvc := NewRevocationService()
+			currentValidator := NewJWTValidator(validPublicKey, currentRevocationSvc, nil)
+			currentHandler := currentValidator.Middleware(nextHandler)
 
 			// Create request
 			req := httptest.NewRequest("GET", "/", nil)
@@ -218,7 +254,7 @@ func TestJWTValidatorMiddleware(t *testing.T) {
 			rr := httptest.NewRecorder()
 
 			// Call handler
-			handler.ServeHTTP(rr, req)
+			currentHandler.ServeHTTP(rr, req)
 
 			// Check if next handler was called
 			if tc.shouldPass && !handlerCalled {
