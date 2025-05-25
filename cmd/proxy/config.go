@@ -16,6 +16,14 @@ type ProxyConfig struct {
 	// Control server settings
 	ControlServerURL    string `env:"ZDVV_CONTROL_SERVER_URL"`
 	ControlServerSecret string `env:"ZDVV_CONTROL_SERVER_SHARED_SECRET"`
+	// Server information for registration
+	Latitude           float64 `env:"ZDVV_LATITUDE,default=0"`
+	Longitude          float64 `env:"ZDVV_LONGITUDE,default=0"`
+	City               string  `env:"ZDVV_CITY,default=Unknown"`
+	Country            string  `env:"ZDVV_COUNTRY,default=Unknown"`
+	SupportsConnectTCP bool    `env:"ZDVV_SUPPORTS_CONNECT_TCP,default=true"`
+	SupportsConnectUDP bool    `env:"ZDVV_SUPPORTS_CONNECT_UDP,default=false"`
+	SupportsConnectIP  bool    `env:"ZDVV_SUPPORTS_CONNECT_IP,default=false"`
 }
 
 // NewConfig creates and returns a new Config struct with values from environment variables
@@ -42,6 +50,29 @@ func (c *ProxyConfig) LogSettings() {
 		log.Println("Control Server Shared Secret: [SET]")
 	} else {
 		log.Println("Control Server integration: DISABLED")
+	}
+
+	log.Printf("Location: %s, %s (%.4f, %.4f)",
+		c.City, c.Country, c.Latitude, c.Longitude)
+	log.Printf("Capabilities: TCP=%v, UDP=%v, IP=%v",
+		c.SupportsConnectTCP, c.SupportsConnectUDP, c.SupportsConnectIP)
+
+}
+
+// CreateServer creates a common.Server object from the current configuration
+func (c *ProxyConfig) CreateServer(hostname string) common.Server {
+	// If ProxyURL isn't set, construct it using the hostname
+	proxyURL := fmt.Sprintf("https://%s", hostname)
+
+	return common.Server{
+		ProxyURL:           proxyURL,
+		Latitude:           c.Latitude,
+		Longitude:          c.Longitude,
+		City:               c.City,
+		Country:            c.Country,
+		SupportsConnectTCP: c.SupportsConnectTCP,
+		SupportsConnectUDP: c.SupportsConnectUDP,
+		SupportsConnectIP:  c.SupportsConnectIP,
 	}
 }
 
