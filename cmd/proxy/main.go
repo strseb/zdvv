@@ -9,9 +9,7 @@ import (
 
 	"github.com/basti/zdvv/pkg/common"
 	"github.com/basti/zdvv/pkg/common/auth"
-	commonhttp "github.com/basti/zdvv/pkg/common/http"
 	"github.com/basti/zdvv/pkg/control"
-	"github.com/basti/zdvv/pkg/proxy"
 	"github.com/golang-jwt/jwt/v5"
 )
 
@@ -95,18 +93,14 @@ func (m *MockControlServer) CreateToken(permissions []auth.Permission) (*jwt.Tok
 	log.Println("[MockControlServer] Token created and signed with RS256.")
 	return token, nil
 }
-func (m *MockControlServer) FetchRevokedTokens() ([]string, error) {
-	log.Println("[MockControlServer] FetchRevokedTokens called")
-	return []string{}, nil
-}
 
 func main() {
 	common.ImportDotenv()
-	proxyCfg, err := proxy.NewConfig()
+	proxyCfg, err := NewProxyConfig()
 	if err != nil {
 		log.Fatalf("Proxy configuration error: %v", err)
 	}
-	httpCfg, err := commonhttp.NewHTTPConfig()
+	httpCfg, err := NewHTTPConfig()
 	if err != nil {
 		log.Fatalf("HTTP configuration error: %v", err)
 	}
@@ -131,8 +125,6 @@ func main() {
 		}
 	}()
 
-	revocationSvc := auth.NewRevocationService()
-
 	jwtPublicKey, err := controlServer.PublicKey()
 	if err != nil {
 		log.Printf("Warning: Failed to get public key from control server: %v. Will try config.", err)
@@ -140,41 +132,13 @@ func main() {
 		log.Println("Successfully fetched JWT public key from control server.")
 	}
 
-	go func() {
-		// Default poll interval if not configured, e.g., 30 minutes.
-		pollInterval := 30 * time.Minute
-		for {
-			revokedTokens, err := controlServer.FetchRevokedTokens()
-			if err != nil {
-				log.Printf("Error fetching revoked tokens: %v", err)
-			} else if len(revokedTokens) > 0 {
-				log.Printf("Fetched %d revoked token(s).", len(revokedTokens))
-				// Assuming Revoke takes a slice. If it's not variadic or takes one by one:
-				for _, tokenStr := range revokedTokens {
-					revocationSvc.Revoke(tokenStr) // Call for each token
-				}
-			} else {
-				log.Println("No new revoked tokens fetched.")
-			}
-			time.Sleep(pollInterval)
-		}
-	}()
-
 	requiredConnectPermissions := []auth.Permission{auth.PERMISSION_CONNECT_TCP}
 	var proxyAuthenticator auth.Authenticator
 
-	if proxyCfg.Insecure {
-		log.Println("Operating in INSECURE mode. JWT validation will be skipped.")
-		proxyAuthenticator = auth.NewInsecureJWTValidator(revocationSvc, requiredConnectPermissions)
-	} else {
-		if jwtPublicKey == nil {
-			log.Fatalf("Secure mode requires a JWT public key, but none was loaded.")
-		}
-		log.Println("Operating in SECURE mode. JWTs will be validated.")
-		proxyAuthenticator = auth.NewJWTValidator(jwtPublicKey, revocationSvc, requiredConnectPermissions)
-	}
+	log.Println("Operating in SECURE mode. JWTs will be validated.")
+	proxyAuthenticator = auth.NewJWTValidator(jwtPublicKey, requiredConnectPermissions)
 
-	proxyService := proxy.NewProxyService(controlServer)
+	proxyService := NewProxyService(controlServer)
 	authenticatedProxyService := proxyAuthenticator.Middleware(proxyService)
 
 	// Create a token and print it
@@ -185,7 +149,7 @@ func main() {
 	log.Printf("Generated token: %s", token.Raw)
 
 	log.Println("Starting ZDVV Proxy Service...")
-	commonhttp.ServeHTTP(httpCfg, authenticatedProxyService, proxyCfg.Insecure)
+	CreateHTTPServers(httpCfg, authenticatedProxyService, proxyCfg.Insecure)
 
 	log.Println("ZDVV Proxy Service has shut down.")
 }

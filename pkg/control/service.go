@@ -24,5 +24,4 @@ type ServerController interface {
 type JwtController interface {
 	PublicKey() (*rsa.PublicKey, error)
 	CreateToken([]auth.Permission) (*jwt.Token, error)
-	FetchRevokedTokens() ([]string, error)
 }

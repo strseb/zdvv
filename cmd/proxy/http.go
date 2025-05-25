@@ -1,4 +1,4 @@
-package http
+package main
 
 import (
 	"crypto/tls"
@@ -65,9 +65,9 @@ func getTLSConfig(cfg *HTTPConfig) (*tls.Config, bool, error) {
 	return tlsConfig, usingAutocert, nil
 }
 
-// ServeHTTP starts the HTTP/S and potentially an insecure HTTP server based on the provided configuration and handler.
+// CreateHTTPServers starts the HTTP/S and potentially an insecure HTTP server based on the provided configuration and handler.
 // It also handles HTTP/3 if enabled in the config.
-func ServeHTTP(httpCfg *HTTPConfig, mainHandler http.Handler, globalInsecureMode bool) {
+func CreateHTTPServers(httpCfg *HTTPConfig, mainHandler http.Handler, globalInsecureMode bool) {
 	tlsConfig, usingAutocert, err := getTLSConfig(httpCfg)
 	if err != nil {
 		log.Fatalf("Failed to get TLS config for HTTP server: %v", err)

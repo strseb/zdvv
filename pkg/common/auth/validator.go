@@ -36,31 +36,17 @@ type JWTValidator struct {
 	Header             string
 	Scheme             string
 	PublicKey          *rsa.PublicKey
-	RevocationSvc      *RevocationService
 	AllowNoneSignature bool         // Allow 'none' alg in insecure mode
 	Permissions        []Permission // List of permission check functions
 }
 
 // NewJWTValidator creates a new JWT validator
-func NewJWTValidator(publicKey *rsa.PublicKey, revocationSvc *RevocationService, permissions []Permission) *JWTValidator {
+func NewJWTValidator(publicKey *rsa.PublicKey, permissions []Permission) *JWTValidator {
 	return &JWTValidator{
-		Header:        DefaultAuthHeader,
-		Scheme:        DefaultAuthScheme,
-		PublicKey:     publicKey,
-		RevocationSvc: revocationSvc,
-		Permissions:   permissions,
-	}
-}
-
-// NewInsecureJWTValidator creates a JWT validator that allows 'none' algorithm
-func NewInsecureJWTValidator(revocationSvc *RevocationService, permissions []Permission) *JWTValidator {
-	return &JWTValidator{
-		Header:             DefaultAuthHeader,
-		Scheme:             DefaultAuthScheme,
-		PublicKey:          nil, // Not needed for 'none'
-		RevocationSvc:      revocationSvc,
-		AllowNoneSignature: true,
-		Permissions:        permissions,
+		Header:      DefaultAuthHeader,
+		Scheme:      DefaultAuthScheme,
+		PublicKey:   publicKey,
+		Permissions: permissions,
 	}
 }
 
@@ -88,13 +74,6 @@ func (v *JWTValidator) ValidateToken(tokenStr string) (*jwt.Token, error) {
 		if err == nil && token.Method.Alg() == "none" {
 			token.Valid = true
 			if claims, ok := token.Claims.(jwt.MapClaims); ok {
-				if jti, ok := claims["jti"].(string); ok {
-					if v.RevocationSvc.IsRevoked(jti) {
-						return nil, ErrTokenRevoked
-					}
-				} else {
-					return nil, errors.New("token missing jti claim")
-				}
 				// Check permissions
 				for _, perm := range v.Permissions {
 					if !perm.Check(claims) {
@@ -122,13 +101,6 @@ func (v *JWTValidator) ValidateToken(tokenStr string) (*jwt.Token, error) {
 	}
 
 	if claims, ok := token.Claims.(jwt.MapClaims); ok {
-		if jti, ok := claims["jti"].(string); ok {
-			if v.RevocationSvc.IsRevoked(jti) {
-				return nil, ErrTokenRevoked
-			}
-		} else {
-			return nil, errors.New("token missing jti claim")
-		}
 		// Check permissions
 		for _, perm := range v.Permissions {
 			if !perm.Check(claims) {

@@ -46,8 +46,7 @@ func createTokenWithKey(t *testing.T, privateKey *rsa.PrivateKey, jti string) st
 func TestJWTValidatorExtractToken(t *testing.T) {
 	// Generate a dummy public key for validator initialization, as this test doesn't validate the signature.
 	_, publicKey := createTestToken(t, "dummy-jti-for-extract")
-	revocationSvc := NewRevocationService()
-	validator := NewJWTValidator(publicKey, revocationSvc, nil)
+	validator := NewJWTValidator(publicKey, nil)
 
 	// Test cases
 	tests := []struct {
@@ -129,51 +128,35 @@ func TestJWTValidatorValidateToken(t *testing.T) {
 	tests := []struct {
 		name          string
 		tokenString   string
-		revokeFirst   bool
 		shouldBeValid bool
 	}{
 		{
 			name:          "Valid token",
 			tokenString:   validToken,
-			revokeFirst:   false,
 			shouldBeValid: true,
 		},
 		{
 			name:          "Invalid signature",
 			tokenString:   invalidToken,
-			revokeFirst:   false,
-			shouldBeValid: false,
-		},
-		{
-			name:          "Revoked token",
-			tokenString:   validToken,
-			revokeFirst:   true,
 			shouldBeValid: false,
 		},
 		{
 			name:          "Token without JTI",
 			tokenString:   tokenWithoutJTIString,
-			revokeFirst:   false,
 			shouldBeValid: false,
 		},
 		{
 			name:          "Malformed token",
 			tokenString:   "not-a-valid-token",
-			revokeFirst:   false,
 			shouldBeValid: false,
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			// Reset revocation service and validator for each test, ensuring correct public key
-			currentRevocationSvc := NewRevocationService()
-			currentValidator := NewJWTValidator(validPublicKey, currentRevocationSvc, nil)
+			// Reset validator for each test, ensuring correct public key
+			currentValidator := NewJWTValidator(validPublicKey, nil)
 
-			// Revoke token if needed for this test
-			if tc.revokeFirst {
-				currentRevocationSvc.Revoke(validJTI) // Assuming validJTI is the one to revoke
-			}
 			token, err := currentValidator.ValidateToken(tc.tokenString)
 
 			if tc.shouldBeValid {
@@ -236,12 +219,7 @@ func TestJWTValidatorMiddleware(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// Reset state
 			handlerCalled = false
-			// Ensure a fresh revocation service for each sub-test if necessary,
-			// though for this specific middleware test, it might not be strictly needed
-			// unless testing revocation within middleware.
-			// For consistency with ValidateToken test:
-			currentRevocationSvc := NewRevocationService()
-			currentValidator := NewJWTValidator(validPublicKey, currentRevocationSvc, nil)
+			currentValidator := NewJWTValidator(validPublicKey, nil)
 			currentHandler := currentValidator.Middleware(nextHandler)
 
 			// Create request
