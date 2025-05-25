@@ -76,3 +76,12 @@ func newJWTKey() (*JWTKey, error) {
 		Kty:        "RSA",
 	}, nil
 }
+
+func (s *Server) GenerateRevocationToken() (string, error) {
+	tokenBytes := make([]byte, 32)
+	if _, err := rand.Read(tokenBytes); err != nil {
+		return "", err
+	}
+	s.RevocationToken = base64.URLEncoding.EncodeToString(tokenBytes)
+	return s.RevocationToken, nil
+}

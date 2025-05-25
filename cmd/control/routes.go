@@ -18,10 +18,6 @@ func createRouter(db Database, cfg *Config) *chi.Mux {
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 
-	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("Hello World!"))
-	})
-
 	jwtKeyMutex := sync.RWMutex{}
 	jwtKey, err := newJWTKey()
 	if err != nil {
@@ -130,9 +126,39 @@ func createRouter(db Database, cfg *Config) *chi.Mux {
 				})
 			})
 
-			r.Get("/demo", func(w http.ResponseWriter, r *http.Request) {
+			r.Post("/server", func(w http.ResponseWriter, r *http.Request) {
+				var server Server
+				if err := json.NewDecoder(r.Body).Decode(&server); err != nil {
+					http.Error(w, "Invalid request payload", http.StatusBadRequest)
+					return
+				}
+
+				revocationToken, err := server.GenerateRevocationToken()
+				if err != nil {
+					http.Error(w, "Failed to generate revocation token", http.StatusInternalServerError)
+					return
+				}
+
+				if err := db.AddServer(&server); err != nil {
+					http.Error(w, "Failed to add server", http.StatusInternalServerError)
+					return
+				}
+
+				w.Header().Set("Content-Type", "application/json")
+				json.NewEncoder(w).Encode(map[string]string{
+					"revocationToken": revocationToken,
+				})
+			})
+
+			r.Delete("/server/{revocationToken}", func(w http.ResponseWriter, r *http.Request) {
+				revocationToken := chi.URLParam(r, "revocationToken")
+				if err := db.RemoveServerByToken(revocationToken); err != nil {
+					http.Error(w, "Failed to remove server", http.StatusInternalServerError)
+					return
+				}
+
 				w.WriteHeader(http.StatusOK)
-				w.Write([]byte("Demo route accessed"))
+				w.Write([]byte("Server removed successfully"))
 			})
 		})
 	})

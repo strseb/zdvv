@@ -11,10 +11,11 @@ import (
 
 // Database defines an interface for database operations.
 type Database interface {
-	PutServer(val *Server) error
 	GetAllServers() ([]*Server, error)
 	PutJWTKey(val *JWTKey) error
 	GetAllActiveJWTKeys() ([]*JWTKey, error)
+	AddServer(server *Server) error
+	RemoveServerByToken(revocationToken string) error
 }
 
 // RedisDatabase is an implementation of the Database interface using Redis.
@@ -28,7 +29,7 @@ func NewRedisDatabase(db *redis.Client) *RedisDatabase {
 }
 
 // PutServer stores the Server object in Redis as a hash using proxyUrl as the key.
-func (r *RedisDatabase) PutServer(val *Server) error {
+func (r *RedisDatabase) AddServer(val *Server) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 
@@ -143,6 +144,34 @@ func (r *RedisDatabase) GetAllActiveJWTKeys() ([]*JWTKey, error) {
 	}
 
 	return jwtKeys, nil
+}
+
+// RemoveServerByToken removes a server from the database by its revocation token.
+func (r *RedisDatabase) RemoveServerByToken(revocationToken string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+
+	var keys []string
+	iter := r.db.Scan(ctx, 0, "server:*", 0).Iterator()
+	for iter.Next(ctx) {
+		keys = append(keys, iter.Val())
+	}
+	if err := iter.Err(); err != nil {
+		return err
+	}
+
+	for _, key := range keys {
+		data, err := r.db.HGetAll(ctx, key).Result()
+		if err != nil {
+			return err
+		}
+
+		if data["revocationToken"] == revocationToken {
+			return r.db.Del(ctx, key).Err()
+		}
+	}
+
+	return fmt.Errorf("server with revocation token not found")
 }
 
 // Helper functions to parse string values from Redis
