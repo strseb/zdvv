@@ -9,8 +9,26 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// putServer stores the Server object in Redis as a hash using proxyUrl as the key.
-func putServer(val *Server, db *redis.Client) error {
+// Database defines an interface for database operations.
+type Database interface {
+	PutServer(val *Server) error
+	GetAllServers() ([]*Server, error)
+	PutJWTKey(val *JWTKey) error
+	GetAllActiveJWTKeys() ([]*JWTKey, error)
+}
+
+// RedisDatabase is an implementation of the Database interface using Redis.
+type RedisDatabase struct {
+	db *redis.Client
+}
+
+// NewRedisDatabase creates a new RedisDatabase instance.
+func NewRedisDatabase(db *redis.Client) *RedisDatabase {
+	return &RedisDatabase{db: db}
+}
+
+// PutServer stores the Server object in Redis as a hash using proxyUrl as the key.
+func (r *RedisDatabase) PutServer(val *Server) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 
@@ -27,27 +45,26 @@ func putServer(val *Server, db *redis.Client) error {
 		"revocationToken":    val.RevocationToken,
 	}
 
-	return db.HSet(ctx, key, data).Err()
+	return r.db.HSet(ctx, key, data).Err()
 }
 
-// getAllServers retrieves all Server objects stored in Redis hashes.
-func getAllServers(db *redis.Client) ([]*Server, error) {
+// GetAllServers retrieves all Server objects stored in Redis hashes.
+func (r *RedisDatabase) GetAllServers() ([]*Server, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 
 	var keys []string
-	iter := db.Scan(ctx, 0, "server:*", 0).Iterator()
+	iter := r.db.Scan(ctx, 0, "server:*", 0).Iterator()
 	for iter.Next(ctx) {
 		keys = append(keys, iter.Val())
 	}
-	err := iter.Err()
-	if err != nil {
+	if err := iter.Err(); err != nil {
 		return nil, err
 	}
 
 	var servers []*Server
 	for _, key := range keys {
-		data, err := db.HGetAll(ctx, key).Result()
+		data, err := r.db.HGetAll(ctx, key).Result()
 		if err != nil {
 			return nil, err
 		}
@@ -69,8 +86,8 @@ func getAllServers(db *redis.Client) ([]*Server, error) {
 	return servers, nil
 }
 
-// put stores the JWTKey object in Redis as a hash using kid as the key.
-func put(val *JWTKey, db *redis.Client) error {
+// PutJWTKey stores the JWTKey object in Redis as a hash using kid as the key.
+func (r *RedisDatabase) PutJWTKey(val *JWTKey) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 
@@ -82,38 +99,36 @@ func put(val *JWTKey, db *redis.Client) error {
 		"expiresAt": val.ExpiresAt,
 	}
 
-	// Calculate expiration: 25h after val.ExpiresAt
 	expireAt := time.Unix(val.ExpiresAt, 0).Add(25 * time.Hour)
 	ttl := time.Until(expireAt)
 	if ttl <= 0 {
 		return fmt.Errorf("expiration time is in the past")
 	}
 
-	pipe := db.TxPipeline()
+	pipe := r.db.TxPipeline()
 	pipe.HSet(ctx, key, data)
 	pipe.Expire(ctx, key, ttl)
 	_, err := pipe.Exec(ctx)
 	return err
 }
 
-// getAllActiveJWTKeys retrieves all JWTKey objects stored in Redis hashes.
-func getAllActiveJWTKeys(db *redis.Client) ([]*JWTKey, error) {
+// GetAllActiveJWTKeys retrieves all JWTKey objects stored in Redis hashes.
+func (r *RedisDatabase) GetAllActiveJWTKeys() ([]*JWTKey, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 
 	var keys []string
-	iter := db.Scan(ctx, 0, "kid:*", 0).Iterator()
+	iter := r.db.Scan(ctx, 0, "kid:*", 0).Iterator()
 	for iter.Next(ctx) {
 		keys = append(keys, iter.Val())
 	}
-	err := iter.Err()
-	if err != nil {
+	if err := iter.Err(); err != nil {
 		return nil, err
 	}
 
 	var jwtKeys []*JWTKey
 	for _, key := range keys {
-		data, err := db.HGetAll(ctx, key).Result()
+		data, err := r.db.HGetAll(ctx, key).Result()
 		if err != nil {
 			return nil, err
 		}

@@ -44,7 +44,7 @@ type JWTKey struct {
 	// If the key is expired tokens are still valid until their own expiration date.
 	ExpiresAt int64 `json:"expiresAt"` // Expiration time of the key in Unix timestamp
 
-	privateKey rsa.PrivateKey `json:"-"`
+	privateKey *rsa.PrivateKey `json:"-"`
 }
 
 func (jwt *JWTKey) IsExpired() bool {
@@ -72,7 +72,7 @@ func newJWTKey() (*JWTKey, error) {
 		PublicKey:  base64.StdEncoding.EncodeToString(pubBytes),
 		Kid:        kid.Int64(), // random id
 		ExpiresAt:  time.Now().Add(24 * time.Hour).Unix(),
-		privateKey: *privateKey,
+		privateKey: privateKey,
 		Kty:        "RSA",
 	}, nil
 }
