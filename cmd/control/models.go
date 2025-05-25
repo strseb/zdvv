@@ -36,7 +36,8 @@ type Server struct {
 
 type JWTKey struct {
 	// base64 encoded public key used to verify JWT tokens
-	PublicKey string `json:"publicKey"`
+	Kty       string `json:"kty"` // Key type, e.g., "RSA"
+	PublicKey string `json:"k"`
 	Kid       int64  `json:"kid"` // Key ID for the public key
 	// Expiration date of the key in Unix timestamp
 	// JWT tokens can be signed with this key until it expires.
@@ -50,7 +51,7 @@ func (jwt *JWTKey) IsExpired() bool {
 	return jwt.ExpiresAt < 0 || jwt.ExpiresAt < time.Now().Unix()
 }
 
-func newJWT() (*JWTKey, error) {
+func newJWTKey() (*JWTKey, error) {
 	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		return nil, err
@@ -70,7 +71,8 @@ func newJWT() (*JWTKey, error) {
 	return &JWTKey{
 		PublicKey:  base64.StdEncoding.EncodeToString(pubBytes),
 		Kid:        kid.Int64(), // random id
-		ExpiresAt:  -1,          // Default to expired
+		ExpiresAt:  time.Now().Add(24 * time.Hour).Unix(),
 		privateKey: *privateKey,
+		Kty:        "RSA",
 	}, nil
 }
