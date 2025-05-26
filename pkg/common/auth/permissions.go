@@ -7,7 +7,18 @@ type Permission string
 
 const (
 	PERMISSION_CONNECT_TCP Permission = "connect-tcp"
+	PERMISSION_CONNECT_UDP Permission = "connect-udp"
+	PERMISSION_CONNECT_IP  Permission = "connect-ip"
 )
+
+// GetPermissionStrings converts Permission constants to their string representations
+func GetPermissionStrings(permissions []Permission) []string {
+	result := make([]string, len(permissions))
+	for i, p := range permissions {
+		result[i] = string(p)
+	}
+	return result
+}
 
 func (p *Permission) Check(claims jwt.MapClaims) bool {
 	if claims == nil {

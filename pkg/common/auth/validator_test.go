@@ -10,6 +10,17 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
+// mockSingleKeyProvider provides a single public key for testing
+type mockSingleKeyProvider struct {
+	publicKey *rsa.PublicKey
+}
+
+func (m *mockSingleKeyProvider) PublicKeys() (map[uint64]*rsa.PublicKey, error) {
+	return map[uint64]*rsa.PublicKey{
+		1: m.publicKey,
+	}, nil
+}
+
 // Helper function to create a new valid JWT token signed with RSA
 func createTestToken(t *testing.T, jti string) (string, *rsa.PublicKey) {
 	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
@@ -43,139 +54,161 @@ func createTokenWithKey(t *testing.T, privateKey *rsa.PrivateKey, jti string) st
 	return tokenString
 }
 
-func TestJWTValidatorExtractToken(t *testing.T) {
-	// Generate a dummy public key for validator initialization, as this test doesn't validate the signature.
+// TestTokenExtraction tests the token extraction logic that's now part of the Middleware function
+func TestTokenExtraction(t *testing.T) {
+	// Generate a dummy public key for validator initialization
 	_, publicKey := createTestToken(t, "dummy-jti-for-extract")
-	validator := NewJWTValidator(publicKey, nil)
 
 	// Test cases
 	tests := []struct {
-		name          string
-		header        string
-		headerValue   string
-		expectedError error
-		expectedToken string
+		name                string
+		header              string
+		headerValue         string
+		expectStatusCode    int
+		expectHandlerCalled bool
 	}{
 		{
-			name:          "No header",
-			header:        "",
-			headerValue:   "",
-			expectedError: ErrNoAuthHeader,
+			name:                "No header",
+			header:              "",
+			headerValue:         "",
+			expectStatusCode:    http.StatusUnauthorized,
+			expectHandlerCalled: false,
 		},
 		{
-			name:          "Invalid scheme",
-			header:        "Proxy-Authorization",
-			headerValue:   "Basic token123",
-			expectedError: ErrInvalidScheme,
+			name:                "Invalid scheme",
+			header:              "Proxy-Authorization",
+			headerValue:         "Basic token123",
+			expectStatusCode:    http.StatusUnauthorized,
+			expectHandlerCalled: false,
 		},
 		{
-			name:          "Valid header",
-			header:        "Proxy-Authorization",
-			headerValue:   "Bearer token123",
-			expectedError: nil,
-			expectedToken: "token123",
+			name:                "Valid header but invalid token",
+			header:              "Proxy-Authorization",
+			headerValue:         "Bearer invalid-token",
+			expectStatusCode:    http.StatusUnauthorized,
+			expectHandlerCalled: false,
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
+			keyProvider := &mockSingleKeyProvider{publicKey: publicKey}
+			validator := NewMultiKeyJWTValidator(keyProvider, nil)
+			handlerCalled := false
+
+			nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				handlerCalled = true
+				w.WriteHeader(http.StatusOK)
+			})
+
+			middleware := validator.Middleware(nextHandler)
+
 			req := httptest.NewRequest("GET", "/", nil)
 			if tc.header != "" {
 				req.Header.Add(tc.header, tc.headerValue)
 			}
 
-			token, err := validator.ExtractToken(req)
+			rr := httptest.NewRecorder()
+			middleware.ServeHTTP(rr, req)
 
-			// Check error
-			if err != tc.expectedError {
-				t.Fatalf("Expected error %v, got %v", tc.expectedError, err)
+			if rr.Code != tc.expectStatusCode {
+				t.Errorf("Expected status code %d, got %d", tc.expectStatusCode, rr.Code)
 			}
 
-			// If we expected success, check the token
-			if tc.expectedError == nil && token != tc.expectedToken {
-				t.Fatalf("Expected token %s, got %s", tc.expectedToken, token)
+			if handlerCalled != tc.expectHandlerCalled {
+				t.Errorf("Expected handler called: %v, got: %v", tc.expectHandlerCalled, handlerCalled)
 			}
 		})
 	}
 }
 
-func TestJWTValidatorValidateToken(t *testing.T) {
-	// Create a key pair for valid tokens
-	validPrivateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+// TestMultiKeyJWTValidatorPermissions tests the permission checking in MultiKeyJWTValidator
+func TestMultiKeyJWTValidatorPermissions(t *testing.T) {
+	// Create a key pair for tokens
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		t.Fatalf("Error generating RSA private key: %v", err)
 	}
-	validPublicKey := &validPrivateKey.PublicKey
+	publicKey := &privateKey.PublicKey
 
-	// Create a valid token
-	validJTI := "valid-token-id"
-	validToken := createTokenWithKey(t, validPrivateKey, validJTI)
-
-	// Create a token with invalid signature (signed by a different key)
-	invalidPrivateKey, err := rsa.GenerateKey(rand.Reader, 2048)
-	if err != nil {
-		t.Fatalf("Error generating another RSA private key: %v", err)
-	}
-	invalidToken := createTokenWithKey(t, invalidPrivateKey, "invalid-sig-jti")
-
-	// Create a token without JTI, signed with the valid key
-	tokenWithoutJTI := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
-		"sub": "test-user",
+	// Create a token with connect permission
+	tokenWithConnect := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
+		"sub":         "test-user",
+		"jti":         "permission-test",
+		"connect-tcp": true,
+		"connect_ip":  false,
 	})
-	tokenWithoutJTIString, _ := tokenWithoutJTI.SignedString(validPrivateKey)
+	tokenWithConnect.Header["kid"] = 1 // Add key ID to match our mock provider
+	tokenWithConnectStr, _ := tokenWithConnect.SignedString(privateKey)
 
-	// Test cases
+	// Create a token without connect permission
+	tokenWithoutConnect := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
+		"sub":        "test-user",
+		"jti":        "permission-test-2",
+		"connect_ip": true,
+	})
+	tokenWithoutConnect.Header["kid"] = 1 // Add key ID to match our mock provider
+	tokenWithoutConnectStr, _ := tokenWithoutConnect.SignedString(privateKey)
+
+	// Test cases for permission checking
 	tests := []struct {
-		name          string
-		tokenString   string
-		shouldBeValid bool
+		name         string
+		tokenString  string
+		permissions  []Permission
+		shouldPass   bool
+		expectedCode int
 	}{
 		{
-			name:          "Valid token",
-			tokenString:   validToken,
-			shouldBeValid: true,
+			name:         "Token with required permission",
+			tokenString:  tokenWithConnectStr,
+			permissions:  []Permission{PERMISSION_CONNECT_TCP},
+			shouldPass:   true,
+			expectedCode: http.StatusOK,
 		},
 		{
-			name:          "Invalid signature",
-			tokenString:   invalidToken,
-			shouldBeValid: false,
-		},
-		{
-			name:          "Token without JTI",
-			tokenString:   tokenWithoutJTIString,
-			shouldBeValid: false,
-		},
-		{
-			name:          "Malformed token",
-			tokenString:   "not-a-valid-token",
-			shouldBeValid: false,
+			name:         "Token missing required permission",
+			tokenString:  tokenWithoutConnectStr,
+			permissions:  []Permission{PERMISSION_CONNECT_TCP},
+			shouldPass:   false,
+			expectedCode: http.StatusUnauthorized,
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			// Reset validator for each test, ensuring correct public key
-			currentValidator := NewJWTValidator(validPublicKey, nil)
+			handlerCalled := false
 
-			token, err := currentValidator.ValidateToken(tc.tokenString)
+			nextHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				handlerCalled = true
+				w.WriteHeader(http.StatusOK)
+			})
 
-			if tc.shouldBeValid {
-				if err != nil {
-					t.Fatalf("Expected valid token, got error: %v", err)
-				}
-				if !token.Valid {
-					t.Fatal("Token should be valid")
-				}
-			} else {
-				if err == nil {
-					t.Fatal("Expected error for invalid token")
-				}
+			keyProvider := &mockSingleKeyProvider{publicKey: publicKey}
+			validator := NewMultiKeyJWTValidator(keyProvider, tc.permissions)
+			middleware := validator.Middleware(nextHandler)
+
+			req := httptest.NewRequest("GET", "/", nil)
+			req.Header.Add("Proxy-Authorization", "Bearer "+tc.tokenString)
+
+			rr := httptest.NewRecorder()
+			middleware.ServeHTTP(rr, req)
+
+			if tc.shouldPass && !handlerCalled {
+				t.Fatal("Expected next handler to be called")
+			}
+
+			if !tc.shouldPass && handlerCalled {
+				t.Fatal("Expected next handler not to be called")
+			}
+
+			if rr.Code != tc.expectedCode {
+				t.Fatalf("Expected status code %d, got %d", tc.expectedCode, rr.Code)
 			}
 		})
 	}
 }
 
-func TestJWTValidatorMiddleware(t *testing.T) {
+func TestMultiKeyJWTValidatorMiddleware(t *testing.T) {
 
 	// Create a key pair for valid tokens
 	validPrivateKey, err := rsa.GenerateKey(rand.Reader, 2048)
@@ -219,7 +252,8 @@ func TestJWTValidatorMiddleware(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// Reset state
 			handlerCalled = false
-			currentValidator := NewJWTValidator(validPublicKey, nil)
+			keyProvider := &mockSingleKeyProvider{publicKey: validPublicKey}
+			currentValidator := NewMultiKeyJWTValidator(keyProvider, nil)
 			currentHandler := currentValidator.Middleware(nextHandler)
 
 			// Create request

@@ -7,6 +7,8 @@ import (
 	"encoding/base64"
 	"math/big"
 	"time"
+
+	"github.com/golang-jwt/jwt/v5"
 )
 
 type Server struct {
@@ -51,7 +53,37 @@ func (jwt *JWTKey) IsExpired() bool {
 	return jwt.ExpiresAt < 0 || jwt.ExpiresAt < time.Now().Unix()
 }
 
-func newJWTKey() (*JWTKey, error) {
+// SignWithClaims creates and signs a JWT token with specific permissions without exposing the private key
+// Only permissions are allowed to be specified, along with standard JWT claims
+func (key *JWTKey) SignWithClaims(issuer string, validDuration time.Duration, permissions []string) (string, error) {
+	// Generate a random JTI (JWT ID)
+	jti, err := rand.Int(rand.Reader, big.NewInt(1<<63-1))
+	if err != nil {
+		return "", err
+	}
+
+	// Create the base claims
+	claims := jwt.MapClaims{
+		"iss": issuer,
+		"exp": time.Now().Add(validDuration).Unix(),
+		"jti": jti.Int64(),
+		"kid": key.Kid,
+	}
+
+	// Add the specified permissions
+	for _, permission := range permissions {
+		claims[permission] = true
+	}
+
+	// Create a new token with the claims
+	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
+	token.Header["kid"] = key.Kid
+
+	// Sign the token with the private key
+	return token.SignedString(key.privateKey)
+}
+
+func NewJWTKey() (*JWTKey, error) {
 	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		return nil, err

@@ -6,17 +6,19 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/basti/zdvv/pkg/common"
 )
 
 // MockDatabase is a mock implementation of the Database interface.
 type MockDatabase struct{}
 
-func (m *MockDatabase) AddServer(val *Server) error {
+func (m *MockDatabase) AddServer(val *common.Server) error {
 	return nil
 }
 
-func (m *MockDatabase) GetAllServers() ([]*Server, error) {
-	return []*Server{
+func (m *MockDatabase) GetAllServers() ([]*common.Server, error) {
+	return []*common.Server{
 		{
 			ProxyURL:           "http://example.com",
 			Latitude:           12.34,
@@ -31,12 +33,12 @@ func (m *MockDatabase) GetAllServers() ([]*Server, error) {
 	}, nil
 }
 
-func (m *MockDatabase) PutJWTKey(val *JWTKey) error {
+func (m *MockDatabase) PutJWTKey(val *common.JWTKey) error {
 	return nil
 }
 
-func (m *MockDatabase) GetAllActiveJWTKeys() ([]*JWTKey, error) {
-	return []*JWTKey{
+func (m *MockDatabase) GetAllActiveJWTKeys() ([]*common.JWTKey, error) {
+	return []*common.JWTKey{
 		{
 			Kty:       "RSA",
 			PublicKey: "test-public-key",

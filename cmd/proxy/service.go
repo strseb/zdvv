@@ -3,18 +3,16 @@ package main
 import (
 	"log"
 	"net/http"
-
-	"github.com/basti/zdvv/pkg/control"
 )
 
 // Proxy handles HTTP requests for the proxy service.
 type Proxy struct {
-	controlServer control.ControlServer
+	controlServer ControlServer
 	// Potentially add other dependencies here, like a logger or config
 }
 
 // NewProxyService creates a new Proxy service.
-func NewProxyService(cs control.ControlServer) *Proxy {
+func NewProxyService(cs ControlServer) *Proxy {
 	return &Proxy{
 		controlServer: cs,
 	}

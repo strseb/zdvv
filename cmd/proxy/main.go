@@ -51,28 +51,14 @@ func main() {
 		}
 	}()
 
-	jwtPublicKey, err := controlServer.PublicKey()
-	if err != nil {
-		log.Printf("Warning: Failed to get public key from control server: %v. Will try config.", err)
-	} else if jwtPublicKey != nil {
-		log.Println("Successfully fetched JWT public key from control server.")
-	}
-
 	requiredConnectPermissions := []auth.Permission{auth.PERMISSION_CONNECT_TCP}
 	var proxyAuthenticator auth.Authenticator
 
-	log.Println("Operating in SECURE mode. JWTs will be validated.")
-	proxyAuthenticator = auth.NewJWTValidator(jwtPublicKey, requiredConnectPermissions)
+	log.Println("Operating in SECURE mode. JWTs will be validated using multiple keys.")
+	proxyAuthenticator = auth.NewMultiKeyJWTValidator(controlServer, requiredConnectPermissions)
 
 	proxyService := NewProxyService(controlServer)
 	authenticatedProxyService := proxyAuthenticator.Middleware(proxyService)
-
-	// Create a token and print it
-	token, err := controlServer.CreateToken([]auth.Permission{auth.PERMISSION_CONNECT_TCP})
-	if err != nil {
-		log.Fatalf("Failed to create token: %v", err)
-	}
-	log.Printf("Generated token: %s", token.Raw)
 
 	log.Println("Starting ZDVV Proxy Service...")
 	CreateHTTPServers(httpCfg, authenticatedProxyService, proxyCfg.Insecure)

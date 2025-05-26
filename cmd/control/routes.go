@@ -1,17 +1,16 @@
 package main
 
 import (
-	"crypto/rand"
 	"encoding/json"
 	"log"
-	"math/big"
 	"net/http"
 	"sync"
 	"time"
 
+	"github.com/basti/zdvv/pkg/common"
+	"github.com/basti/zdvv/pkg/common/auth"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
-	"github.com/golang-jwt/jwt/v5"
 )
 
 func createRouter(db Database, cfg *Config) *chi.Mux {
@@ -19,7 +18,7 @@ func createRouter(db Database, cfg *Config) *chi.Mux {
 	r.Use(middleware.Logger)
 
 	jwtKeyMutex := sync.RWMutex{}
-	jwtKey, err := newJWTKey()
+	jwtKey, err := common.NewJWTKey()
 	if err != nil {
 		log.Fatalf("Failed to create JWT key: %v", err)
 	}
@@ -60,7 +59,7 @@ func createRouter(db Database, cfg *Config) *chi.Mux {
 					jwtKeyMutex.Lock()
 					defer jwtKeyMutex.Unlock()
 					if jwtKey.IsExpired() {
-						newKey, err := newJWTKey()
+						newKey, err := common.NewJWTKey()
 						if err != nil {
 							http.Error(w, "Failed to create new JWT key", http.StatusInternalServerError)
 							return
@@ -76,18 +75,12 @@ func createRouter(db Database, cfg *Config) *chi.Mux {
 					defer jwtKeyMutex.RUnlock()
 				}
 
-				jti, err := rand.Int(rand.Reader, big.NewInt(1<<63-1))
-				if err != nil {
-					http.Error(w, "Failed to generate JTI", http.StatusInternalServerError)
-					return
-				}
-				jwtToken := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
-					"iss": "zdvv-control-server",
-					"exp": time.Now().Add(time.Hour * 1).Unix(),
-					"jti": jti.Int64(),
-					"kid": jwtKey.Kid,
-				})
-				signedToken, err := jwtToken.SignedString(jwtKey.privateKey)
+				// Sign the token using the SignWithClaims method with specific permissions
+				signedToken, err := jwtKey.SignWithClaims(
+					"zdvv-control-server",
+					time.Hour*1,
+					auth.GetPermissionStrings([]auth.Permission{auth.PERMISSION_CONNECT_TCP}),
+				)
 				if err != nil {
 					http.Error(w, "Failed to sign JWT token", http.StatusInternalServerError)
 					log.Printf("Error signing JWT token: %v", err)
@@ -127,7 +120,7 @@ func createRouter(db Database, cfg *Config) *chi.Mux {
 			})
 
 			r.Post("/server", func(w http.ResponseWriter, r *http.Request) {
-				var server Server
+				var server common.Server
 				if err := json.NewDecoder(r.Body).Decode(&server); err != nil {
 					http.Error(w, "Invalid request payload", http.StatusBadRequest)
 					return

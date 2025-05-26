@@ -9,11 +9,9 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/basti/zdvv/pkg/common"
-	"github.com/golang-jwt/jwt/v5"
 )
 
 /**
@@ -24,6 +22,9 @@ type ControlServer interface {
 	RegisterProxyServer(common.Server) error
 	DeregisterProxyServer(common.Server) error
 	Servers() ([]common.Server, error)
+
+	// PublicKeys retrieves all available JWT public keys from the control server
+	// Returns a map of key IDs to RSA public keys
 	PublicKeys() (map[uint64]*rsa.PublicKey, error)
 }
 
@@ -204,42 +205,4 @@ func (h *HTTPControlServer) DeregisterProxyServer(server common.Server) error {
 	}
 
 	return nil
-}
-
-// CreateToken obtains a JWT token from the control server
-func (h *HTTPControlServer) CreateToken(permissions interface{}) (*jwt.Token, error) {
-	resp, err := h.client.Get(fmt.Sprintf("%s/api/v1/token", h.ServerURL))
-	if err != nil {
-		return nil, fmt.Errorf("failed to get token: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("token creation failed with status %d", resp.StatusCode)
-	}
-
-	var response struct {
-		Token string `json:"token"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
-		return nil, fmt.Errorf("failed to parse token response: %w", err)
-	}
-
-	// Parse the token to return a jwt.Token object
-	token, err := jwt.Parse(response.Token, func(token *jwt.Token) (interface{}, error) {
-		// This will be replaced by actual verification during validation
-		// Here we just want to parse the token into an object
-		return nil, nil
-	})
-
-	if err != nil && !strings.Contains(err.Error(), "key is of invalid type") {
-		// Ignore the expected error about the key being invalid since we provided nil
-		return nil, fmt.Errorf("failed to parse JWT token: %w", err)
-	}
-
-	// Set the raw token string for later access
-	token.Raw = response.Token
-
-	return token, nil
 }
