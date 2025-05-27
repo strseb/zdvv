@@ -180,6 +180,12 @@ func LoadEnvToStruct(ptr interface{}) error {
 				return fmt.Errorf("error parsing int for %s from %s: %w", fieldType.Name, envValue, err)
 			}
 			field.SetInt(intValue)
+		case reflect.Float32, reflect.Float64:
+			floatValue, err := strconv.ParseFloat(envValue, field.Type().Bits())
+			if err != nil {
+				return fmt.Errorf("error parsing float for %s from %s: %w", fieldType.Name, envValue, err)
+			}
+			field.SetFloat(floatValue)
 		case reflect.Bool:
 			boolValue, err := strconv.ParseBool(envValue)
 			if err != nil {

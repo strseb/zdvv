@@ -131,7 +131,8 @@ func TestLoadEnvToStruct(t *testing.T) {
 		APIKey      string `env:"TEST_API_KEY"`
 		Timeout     int64  `env:"TEST_TIMEOUT,default=5000"`
 		NotUsed     string
-		Unsupported float64 `env:"TEST_UNSUPPORTED"`
+		Temperature float64 `env:"TEST_TEMPERATURE,default=23.5"`
+		Latitude    float64 `env:"TEST_LATITUDE"`
 	}
 
 	type ConfigRequiredOnly struct {
@@ -140,6 +141,10 @@ func TestLoadEnvToStruct(t *testing.T) {
 
 	type ConfigBadType struct {
 		BadInt int `env:"TEST_BAD_INT"`
+	}
+
+	type ConfigFloat32 struct {
+		Value float32 `env:"TEST_FLOAT32,default=3.14"`
 	}
 
 	tests := []struct {
@@ -232,17 +237,26 @@ func TestLoadEnvToStruct(t *testing.T) {
 			expectError:  true,
 		},
 		{
-			name: "unsupported field type",
+			name: "valid float values",
 			setupEnv: func() {
-				os.Setenv("TEST_UNSUPPORTED", "1.23")
 				os.Setenv("TEST_PORT", "123") // To satisfy required
+				os.Setenv("TEST_TEMPERATURE", "25.75")
+				os.Setenv("TEST_LATITUDE", "-33.8651")
 			},
 			tearDownEnv: func() {
-				os.Unsetenv("TEST_UNSUPPORTED")
 				os.Unsetenv("TEST_PORT")
+				os.Unsetenv("TEST_TEMPERATURE")
+				os.Unsetenv("TEST_LATITUDE")
 			},
 			targetStruct: &Config{},
-			expectError:  true,
+			expectError:  false,
+			validate: func(t *testing.T, s interface{}) {
+				cfg := s.(*Config)
+				if cfg.Temperature != 25.75 || cfg.Latitude != -33.8651 {
+					t.Errorf("Expected Temperature=25.75 and Latitude=-33.8651, got %f and %f",
+						cfg.Temperature, cfg.Latitude)
+				}
+			},
 		},
 		{
 			name: "malformed int value",
@@ -271,6 +285,76 @@ func TestLoadEnvToStruct(t *testing.T) {
 				cfg := s.(*Config)
 				if cfg.APIKey != "" {
 					t.Errorf("Expected APIKey to be empty string, got '%s'", cfg.APIKey)
+				}
+			},
+		},
+		{
+			name: "float default values",
+			setupEnv: func() {
+				os.Setenv("TEST_PORT", "123") // required
+				// TEST_TEMPERATURE not set, should use default
+			},
+			tearDownEnv: func() {
+				os.Unsetenv("TEST_PORT")
+			},
+			targetStruct: &Config{},
+			expectError:  false,
+			validate: func(t *testing.T, s interface{}) {
+				cfg := s.(*Config)
+				if cfg.Temperature != 23.5 {
+					t.Errorf("Expected Temperature=23.5 (default), got %f", cfg.Temperature)
+				}
+			},
+		},
+		{
+			name: "invalid float value",
+			setupEnv: func() {
+				os.Setenv("TEST_PORT", "123") // required
+				os.Setenv("TEST_TEMPERATURE", "not-a-float")
+			},
+			tearDownEnv: func() {
+				os.Unsetenv("TEST_PORT")
+				os.Unsetenv("TEST_TEMPERATURE")
+			},
+			targetStruct: &Config{},
+			expectError:  true,
+		},
+		{
+			name: "scientific notation float",
+			setupEnv: func() {
+				os.Setenv("TEST_PORT", "123")           // required
+				os.Setenv("TEST_TEMPERATURE", "1.23e2") // 123.0
+			},
+			tearDownEnv: func() {
+				os.Unsetenv("TEST_PORT")
+				os.Unsetenv("TEST_TEMPERATURE")
+			},
+			targetStruct: &Config{},
+			expectError:  false,
+			validate: func(t *testing.T, s interface{}) {
+				cfg := s.(*Config)
+				if cfg.Temperature != 123.0 {
+					t.Errorf("Expected Temperature=123.0, got %f", cfg.Temperature)
+				}
+			},
+		},
+		{
+			name: "float32 support",
+			setupEnv: func() {
+				os.Setenv("TEST_FLOAT32", "2.71828")
+			},
+			tearDownEnv: func() {
+				os.Unsetenv("TEST_FLOAT32")
+			},
+			targetStruct: &ConfigFloat32{},
+			expectError:  false,
+			validate: func(t *testing.T, s interface{}) {
+				cfg := s.(*ConfigFloat32)
+				// Using delta comparison since float32 has precision issues
+				delta := float32(0.00001)
+				expected := float32(2.71828)
+				if cfg.Value < expected-delta || cfg.Value > expected+delta {
+					t.Errorf("Expected Value≈2.71828, got %f", cfg.Value)
 				}
 			},
 		},
