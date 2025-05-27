@@ -138,7 +138,7 @@ func (r *RedisDatabase) GetAllActiveJWTKeys() ([]*common.JWTKey, error) {
 		jwtKey := &common.JWTKey{
 			Kty:       data["kty"],
 			PublicKey: data["publicKey"],
-			Kid:       parseInt64(data["kid"]),
+			Kid:       data["kid"],
 			ExpiresAt: parseInt64(data["expiresAt"]),
 		}
 		jwtKeys = append(jwtKeys, jwtKey)

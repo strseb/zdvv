@@ -24,6 +24,7 @@ type ProxyConfig struct {
 	SupportsConnectTCP bool    `env:"ZDVV_SUPPORTS_CONNECT_TCP,default=true"`
 	SupportsConnectUDP bool    `env:"ZDVV_SUPPORTS_CONNECT_UDP,default=false"`
 	SupportsConnectIP  bool    `env:"ZDVV_SUPPORTS_CONNECT_IP,default=false"`
+	ProxyEndpointURL   string  `env:"ZDVV_PROXY_ENDPOINT_URL,default=https://proxy.example.com"`
 }
 
 // NewConfig creates and returns a new Config struct with values from environment variables
@@ -62,10 +63,9 @@ func (c *ProxyConfig) LogSettings() {
 // CreateServer creates a common.Server object from the current configuration
 func (c *ProxyConfig) CreateServer(hostname string) common.Server {
 	// If ProxyURL isn't set, construct it using the hostname
-	proxyURL := fmt.Sprintf("https://%s", hostname)
 
 	return common.Server{
-		ProxyURL:           proxyURL,
+		ProxyURL:           c.ProxyEndpointURL,
 		Latitude:           c.Latitude,
 		Longitude:          c.Longitude,
 		City:               c.City,

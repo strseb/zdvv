@@ -13,12 +13,12 @@ import (
 
 // Mock implementation of KeyProvider for testing
 type mockKeyProvider struct {
-	keys      map[uint64]*rsa.PublicKey
+	keys      map[string]*rsa.PublicKey
 	err       error
 	callCount int
 }
 
-func (m *mockKeyProvider) PublicKeys() (map[uint64]*rsa.PublicKey, error) {
+func (m *mockKeyProvider) PublicKeys() (map[string]*rsa.PublicKey, error) {
 	m.callCount++
 	return m.keys, m.err
 }
@@ -34,12 +34,11 @@ func TestMultiKeyJWTValidator(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to generate key2: %v", err)
 	}
-
 	// Create mock key provider
 	mockProvider := &mockKeyProvider{
-		keys: map[uint64]*rsa.PublicKey{
-			1: &key1.PublicKey,
-			2: &key2.PublicKey,
+		keys: map[string]*rsa.PublicKey{
+			"1": &key1.PublicKey,
+			"2": &key2.PublicKey,
 		},
 	}
 
@@ -47,35 +46,35 @@ func TestMultiKeyJWTValidator(t *testing.T) {
 	validator := NewMultiKeyJWTValidator(mockProvider, []Permission{PERMISSION_CONNECT_TCP})
 	tests := []struct {
 		name          string
-		keyID         int64
+		keyID         string
 		key           *rsa.PrivateKey
 		permissions   map[string]interface{}
 		expectSuccess bool
 	}{
 		{
 			name:          "Valid token with key1",
-			keyID:         1,
+			keyID:         "1",
 			key:           key1,
 			permissions:   map[string]interface{}{"connect-tcp": true},
 			expectSuccess: true,
 		},
 		{
 			name:          "Valid token with key2",
-			keyID:         2,
+			keyID:         "2",
 			key:           key2,
 			permissions:   map[string]interface{}{"connect-tcp": true},
 			expectSuccess: true,
 		},
 		{
 			name:          "Invalid keyID",
-			keyID:         3,
+			keyID:         "3",
 			key:           key1, // Using key1 but with wrong ID
 			permissions:   map[string]interface{}{"connect-tcp": true},
 			expectSuccess: false,
 		},
 		{
 			name:          "Missing permission",
-			keyID:         1,
+			keyID:         "1",
 			key:           key1,
 			permissions:   map[string]interface{}{}, // No connect-tcp permission
 			expectSuccess: false,
@@ -133,12 +132,11 @@ func TestMultiKeyJWTValidatorProviderError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to generate key: %v", err)
 	}
-
 	// Create token
 	token := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
 		"connect-tcp": true,
 	})
-	token.Header["kid"] = 1
+	token.Header["kid"] = "1"
 	tokenString, err := token.SignedString(key)
 	if err != nil {
 		t.Fatalf("Failed to create token: %v", err)

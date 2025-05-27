@@ -25,7 +25,7 @@ type ControlServer interface {
 
 	// PublicKeys retrieves all available JWT public keys from the control server
 	// Returns a map of key IDs to RSA public keys
-	PublicKeys() (map[uint64]*rsa.PublicKey, error)
+	PublicKeys() (map[string]*rsa.PublicKey, error)
 }
 
 type HTTPControlServer struct {
@@ -77,7 +77,7 @@ func (h *HTTPControlServer) Servers() ([]common.Server, error) {
 }
 
 // PublicKeys retrieves the public keys from the control server's JWKS endpoint
-func (h *HTTPControlServer) PublicKeys() (map[uint64]*rsa.PublicKey, error) {
+func (h *HTTPControlServer) PublicKeys() (map[string]*rsa.PublicKey, error) {
 	resp, err := h.client.Get(fmt.Sprintf("%s/.well-known/jwks.json", h.ServerURL))
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve JWKS: %w", err)
@@ -92,7 +92,7 @@ func (h *HTTPControlServer) PublicKeys() (map[uint64]*rsa.PublicKey, error) {
 		Keys []struct {
 			Kty       string `json:"kty"`
 			K         string `json:"k"`
-			Kid       int64  `json:"kid"`
+			Kid       string `json:"kid"`
 			ExpiresAt int64  `json:"expiresAt"`
 		} `json:"keys"`
 	}
@@ -101,7 +101,7 @@ func (h *HTTPControlServer) PublicKeys() (map[uint64]*rsa.PublicKey, error) {
 		return nil, fmt.Errorf("failed to parse JWKS response: %w", err)
 	}
 
-	publicKeys := make(map[uint64]*rsa.PublicKey)
+	publicKeys := make(map[string]*rsa.PublicKey)
 
 	for _, key := range jwks.Keys {
 		if key.Kty != "RSA" {
@@ -111,21 +111,21 @@ func (h *HTTPControlServer) PublicKeys() (map[uint64]*rsa.PublicKey, error) {
 		// Decode the base64 key
 		keyBytes, err := base64.StdEncoding.DecodeString(key.K)
 		if err != nil {
-			return nil, fmt.Errorf("failed to decode key %d: %w", key.Kid, err)
+			return nil, fmt.Errorf("failed to decode key %s: %w", key.Kid, err)
 		}
 
 		// Parse the key bytes into a public key
 		pubKey, err := x509.ParsePKIXPublicKey(keyBytes)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse key %d: %w", key.Kid, err)
+			return nil, fmt.Errorf("failed to parse key %s: %w", key.Kid, err)
 		}
 
 		rsaKey, ok := pubKey.(*rsa.PublicKey)
 		if !ok {
-			return nil, fmt.Errorf("key %d is not an RSA key", key.Kid)
+			return nil, fmt.Errorf("key %s is not an RSA key", key.Kid)
 		}
 
-		publicKeys[uint64(key.Kid)] = rsaKey
+		publicKeys[key.Kid] = rsaKey
 	}
 
 	return publicKeys, nil

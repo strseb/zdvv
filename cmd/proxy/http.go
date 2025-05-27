@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"sync"
 
 	"github.com/quic-go/quic-go/http3"
 	"golang.org/x/crypto/acme"
@@ -69,11 +70,16 @@ func getTLSConfig(cfg *HTTPConfig) (*tls.Config, bool, error) {
 }
 
 // CreateHTTPServers starts the HTTPS and potentially a plain HTTP server based on the provided configuration and handler.
-// It also handles HTTP/3 if enabled in the config.
+// It also handles HTTP/3 if enabled in the config. This function will block until all servers have exited.
 func CreateHTTPServers(httpCfg *HTTPConfig, mainHandler http.Handler, globalInsecureMode bool) {
+	// Use a WaitGroup to track all running servers
+	var wg sync.WaitGroup
+
 	// Start plain HTTP listener if enabled
 	if httpCfg.HTTPEnabled {
+		wg.Add(1)
 		go func() {
+			defer wg.Done()
 			log.Printf("Starting plain HTTP server on %s", httpCfg.HTTPAddr)
 			httpServer := &http.Server{
 				Addr:    httpCfg.HTTPAddr,
@@ -84,8 +90,11 @@ func CreateHTTPServers(httpCfg *HTTPConfig, mainHandler http.Handler, globalInse
 			}
 		}()
 	}
+
 	if !(httpCfg.HTTPSV1Enabled || httpCfg.HTTPSV2Enabled || httpCfg.HTTPSV3Enabled) {
 		log.Println("No HTTPS protocols enabled.")
+		// If there's only an HTTP server or no servers at all, wait and return
+		wg.Wait()
 		return
 	}
 
@@ -110,7 +119,9 @@ func CreateHTTPServers(httpCfg *HTTPConfig, mainHandler http.Handler, globalInse
 			Handler:   mainHandler,
 			TLSConfig: tlsConfig, // Re-use or adapt tlsConfig for QUIC
 		}
+		wg.Add(1)
 		go func() {
+			defer wg.Done()
 			log.Printf("Starting HTTPS/3 server on %s", httpCfg.HTTPSAddr)
 			var h3Err error
 			if usingAutocert {
@@ -123,16 +134,28 @@ func CreateHTTPServers(httpCfg *HTTPConfig, mainHandler http.Handler, globalInse
 			}
 		}()
 	}
-	// Start the main HTTPS server
-	log.Printf("Starting HTTPS server on %s", httpCfg.HTTPSAddr)
-	if usingAutocert {
-		err = httpsServer.ListenAndServeTLS("", "") // Autocert handles certs
-	} else {
-		err = httpsServer.ListenAndServeTLS(httpCfg.CertFile, httpCfg.KeyFile)
-	}
-	if err != nil && err != http.ErrServerClosed {
-		log.Fatalf("HTTPS Server error: %v", err)
-	} else if err == http.ErrServerClosed {
-		log.Println("HTTPS Server closed gracefully.")
-	}
+
+	// Start the main HTTPS server in a goroutine too, so we can wait for all servers
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		// Start the main HTTPS server
+		log.Printf("Starting HTTPS server on %s", httpCfg.HTTPSAddr)
+		var err error
+		if usingAutocert {
+			err = httpsServer.ListenAndServeTLS("", "") // Autocert handles certs
+		} else {
+			err = httpsServer.ListenAndServeTLS(httpCfg.CertFile, httpCfg.KeyFile)
+		}
+		if err != nil && err != http.ErrServerClosed {
+			log.Printf("HTTPS Server error: %v", err)
+		} else if err == http.ErrServerClosed {
+			log.Println("HTTPS Server closed gracefully.")
+		}
+	}()
+
+	// Wait for all servers to exit
+	log.Println("All servers started. Waiting for them to complete...")
+	wg.Wait()
+	log.Println("All servers have exited.")
 }

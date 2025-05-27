@@ -40,7 +40,7 @@ type JWTKey struct {
 	// base64 encoded public key used to verify JWT tokens
 	Kty       string `json:"kty"` // Key type, e.g., "RSA"
 	PublicKey string `json:"k"`
-	Kid       int64  `json:"kid"` // Key ID for the public key
+	Kid       string `json:"kid"` // Key ID for the public key
 	// Expiration date of the key in Unix timestamp
 	// JWT tokens can be signed with this key until it expires.
 	// If the key is expired tokens are still valid until their own expiration date.
@@ -77,7 +77,7 @@ func (key *JWTKey) SignWithClaims(issuer string, validDuration time.Duration, pe
 
 	// Create a new token with the claims
 	token := jwt.NewWithClaims(jwt.SigningMethodRS256, claims)
-	token.Header["kid"] = key.Kid
+	token.Header["kid"] = key.Kid // Set the kid as a string in the header
 
 	// Sign the token with the private key
 	return token.SignedString(key.privateKey)
@@ -95,14 +95,17 @@ func NewJWTKey() (*JWTKey, error) {
 	if err != nil {
 		return nil, err
 	}
-	kid, err := rand.Int(rand.Reader, big.NewInt(1<<63-1)) // Generate a random key ID
+	
+	// Generate a random key ID as a string
+	kidInt, err := rand.Int(rand.Reader, big.NewInt(1<<63-1))
 	if err != nil {
 		return nil, err
 	}
+	kidStr := kidInt.String()
 
 	return &JWTKey{
 		PublicKey:  base64.StdEncoding.EncodeToString(pubBytes),
-		Kid:        kid.Int64(), // random id
+		Kid:        kidStr, // string id
 		ExpiresAt:  time.Now().Add(24 * time.Hour).Unix(),
 		privateKey: privateKey,
 		Kty:        "RSA",

@@ -12,7 +12,7 @@ func TestServersEndpoint(t *testing.T) {
 		t.Fatalf("Failed to set up test: %v", err)
 	}
 
-	client := NewHTTPClient(cfg.ControlURL, cfg.APIKey)
+	client := NewHTTPClient(cfg)
 
 	t.Run("GET /api/v1/servers should return 200 OK and server list", func(t *testing.T) {
 		resp, err := client.Do(Request{

@@ -11,7 +11,7 @@ import (
 )
 
 type Config struct {
-	ListenAddr    string `env:"ZDVV_PORT" default:"localhost:8080"`
+	ListenAddr    string `env:"ZDVV_LISTEN_ADDR" default:":8080"`
 	RedisAddr     string `env:"ZDVV_REDIS_ADDR" default:"localhost:6379"`
 	RedisPassword string `env:"ZDVV_REDIS_PASSWORD" default:""`
 	RedisDB       int    `env:"ZDVV_REDIS_DB" default:"0"`
@@ -47,5 +47,7 @@ func main() {
 	r := createRouter(db, cfg)
 
 	log.Printf("Starting control server on %s", cfg.ListenAddr)
-	http.ListenAndServe(":3000", r)
+	if err := http.ListenAndServe(cfg.ListenAddr, r); err != nil {
+		log.Fatalf("Failed to start control server: %v", err)
+	}
 }

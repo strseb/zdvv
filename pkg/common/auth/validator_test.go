@@ -15,9 +15,9 @@ type mockSingleKeyProvider struct {
 	publicKey *rsa.PublicKey
 }
 
-func (m *mockSingleKeyProvider) PublicKeys() (map[uint64]*rsa.PublicKey, error) {
-	return map[uint64]*rsa.PublicKey{
-		1: m.publicKey,
+func (m *mockSingleKeyProvider) PublicKeys() (map[string]*rsa.PublicKey, error) {
+	return map[string]*rsa.PublicKey{
+		"1": m.publicKey,
 	}, nil
 }
 

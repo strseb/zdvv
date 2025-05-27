@@ -9,7 +9,7 @@ services:
       - "8080:8080"
     environment:
       # Control server settings
-      - ZDVV_PORT=8080
+      - ZDVV_LISTEN_ADDR=:8080
       - ZDVV_REDIS_ADDR=redis:6379
       - ZDVV_REDIS_PASSWORD=
       - ZDVV_REDIS_DB=0
@@ -36,6 +36,7 @@ services:
       - ZDVV_CONTROL_SERVER_SHARED_SECRET=my-secret-key
       
       # Proxy server capabilities
+      - ZDVV_PROXY_ENDPOINT_URL=http://proxy:9090
       - ZDVV_SUPPORTS_CONNECT_TCP=true
       - ZDVV_SUPPORTS_CONNECT_UDP=false
       - ZDVV_SUPPORTS_CONNECT_IP=false

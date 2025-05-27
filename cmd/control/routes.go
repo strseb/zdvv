@@ -19,6 +19,7 @@ func createRouter(db Database, cfg *Config) *chi.Mux {
 
 	jwtKeyMutex := sync.RWMutex{}
 	jwtKey, err := common.NewJWTKey()
+	db.PutJWTKey(jwtKey) // Store the initial JWT key in the database
 	if err != nil {
 		log.Fatalf("Failed to create JWT key: %v", err)
 	}
@@ -60,6 +61,7 @@ func createRouter(db Database, cfg *Config) *chi.Mux {
 					defer jwtKeyMutex.Unlock()
 					if jwtKey.IsExpired() {
 						newKey, err := common.NewJWTKey()
+						db.PutJWTKey(jwtKey)
 						if err != nil {
 							http.Error(w, "Failed to create new JWT key", http.StatusInternalServerError)
 							return
