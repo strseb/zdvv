@@ -63,10 +63,10 @@ services:
       
       # For development, can run in insecure mode (not recommended for production)
       - ZDVV_INSECURE=false
-    volumes:
-      # Mount certificates if needed
-      - ./server.crt:/app/server.crt
-      - ./server.key:/app/server.key
+    # volumes:
+    #  Mount certificates if needed
+    #  - ./server.crt:/app/server.crt
+    #  - ./server.key:/app/server.key
     depends_on:
       - control
 
