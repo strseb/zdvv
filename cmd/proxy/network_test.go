@@ -46,11 +46,10 @@ func TestProxyNetworkFlow(t *testing.T) {
 		io.Copy(conn, conn)
 	}()
 
-	// Create the proxy handler
-	proxyHandler := NewConnectHandler()
-
 	// Set up an HTTP server with the proxy handler
-	proxyServer := httptest.NewServer(proxyHandler)
+	proxyServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		HandleConnectRequest(w, r)
+	}))
 	defer proxyServer.Close()
 
 	// Extract proxy host and port
@@ -73,11 +72,10 @@ func TestProxyNetworkFlow(t *testing.T) {
 // TestConcurrentConnections tests how the proxy handler deals with multiple concurrent connections
 func TestConcurrentConnections(t *testing.T) {
 
-	// Create the handler
-	handler := NewConnectHandler()
-
 	// Create a test server
-	server := httptest.NewServer(handler)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		HandleConnectRequest(w, r)
+	}))
 	defer server.Close()
 
 	// Test concurrent connections

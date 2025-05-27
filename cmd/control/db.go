@@ -6,15 +6,16 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/basti/zdvv/pkg/common"
 	"github.com/redis/go-redis/v9"
 )
 
 // Database defines an interface for database operations.
 type Database interface {
-	GetAllServers() ([]*Server, error)
-	PutJWTKey(val *JWTKey) error
-	GetAllActiveJWTKeys() ([]*JWTKey, error)
-	AddServer(server *Server) error
+	GetAllServers() ([]*common.Server, error)
+	PutJWTKey(val *common.JWTKey) error
+	GetAllActiveJWTKeys() ([]*common.JWTKey, error)
+	AddServer(server *common.Server) error
 	RemoveServerByToken(revocationToken string) error
 }
 
@@ -29,7 +30,7 @@ func NewRedisDatabase(db *redis.Client) *RedisDatabase {
 }
 
 // PutServer stores the Server object in Redis as a hash using proxyUrl as the key.
-func (r *RedisDatabase) AddServer(val *Server) error {
+func (r *RedisDatabase) AddServer(val *common.Server) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 
@@ -50,7 +51,7 @@ func (r *RedisDatabase) AddServer(val *Server) error {
 }
 
 // GetAllServers retrieves all Server objects stored in Redis hashes.
-func (r *RedisDatabase) GetAllServers() ([]*Server, error) {
+func (r *RedisDatabase) GetAllServers() ([]*common.Server, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 
@@ -63,14 +64,14 @@ func (r *RedisDatabase) GetAllServers() ([]*Server, error) {
 		return nil, err
 	}
 
-	var servers []*Server
+	var servers []*common.Server
 	for _, key := range keys {
 		data, err := r.db.HGetAll(ctx, key).Result()
 		if err != nil {
 			return nil, err
 		}
 
-		server := &Server{
+		server := &common.Server{
 			ProxyURL:           data["proxyUrl"],
 			Latitude:           parseFloat(data["latitude"]),
 			Longitude:          parseFloat(data["longitude"]),
@@ -88,7 +89,7 @@ func (r *RedisDatabase) GetAllServers() ([]*Server, error) {
 }
 
 // PutJWTKey stores the JWTKey object in Redis as a hash using kid as the key.
-func (r *RedisDatabase) PutJWTKey(val *JWTKey) error {
+func (r *RedisDatabase) PutJWTKey(val *common.JWTKey) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 
@@ -114,7 +115,7 @@ func (r *RedisDatabase) PutJWTKey(val *JWTKey) error {
 }
 
 // GetAllActiveJWTKeys retrieves all JWTKey objects stored in Redis hashes.
-func (r *RedisDatabase) GetAllActiveJWTKeys() ([]*JWTKey, error) {
+func (r *RedisDatabase) GetAllActiveJWTKeys() ([]*common.JWTKey, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 
@@ -127,14 +128,14 @@ func (r *RedisDatabase) GetAllActiveJWTKeys() ([]*JWTKey, error) {
 		return nil, err
 	}
 
-	var jwtKeys []*JWTKey
+	var jwtKeys []*common.JWTKey
 	for _, key := range keys {
 		data, err := r.db.HGetAll(ctx, key).Result()
 		if err != nil {
 			return nil, err
 		}
 
-		jwtKey := &JWTKey{
+		jwtKey := &common.JWTKey{
 			Kty:       data["kty"],
 			PublicKey: data["publicKey"],
 			Kid:       parseInt64(data["kid"]),
