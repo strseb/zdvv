@@ -1,5 +1,5 @@
 # Use the official Golang image as a base image
-FROM golang:1.24 as builder
+FROM golang:latest as builder
 
 # Set the working directory
 WORKDIR /app
@@ -14,14 +14,13 @@ RUN go mod download
 COPY . .
 
 # Build the application
-RUN go build -o control-server ./main.go
+RUN go build -o control-server ./cmd/control/
 
 # Use a minimal base image for the final build
-FROM gcr.io/distroless/base-debian11
+FROM gcr.io/distroless/base
 
-# Add a non-root user and switch to it
-RUN useradd -m zdvv
-USER zdvv
+# Use a non-root user (UID 1000) for security
+USER 1000
 
 # Set the working directory
 WORKDIR /app

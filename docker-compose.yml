@@ -3,8 +3,8 @@ version: '3.8'
 services:
   control:
     build:
-      context: ./cmd/control
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./cmd/control/Dockerfile
     ports:
       - "8080:8080"
     environment:
@@ -26,8 +26,8 @@ services:
 
   proxy:
     build:
-      context: ./cmd/proxy
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: ./cmd/proxy/Dockerfile
     ports:
       - "9090:9090"
     environment:
@@ -52,10 +52,9 @@ services:
       - ZDVV_HTTP_ALLOWED_ORIGINS=*
       
       # HTTPS configuration (disabled in this example)
-      # - ZDVV_HTTPS_ADDR=:8443
-      # - ZDVV_HTTPS_V1_ENABLED=true
-      # - ZDVV_HTTPS_V2_ENABLED=true
-      # - ZDVV_HTTPS_V3_ENABLED=false
+      - ZDVV_HTTPS_V1_ENABLED=false
+      - ZDVV_HTTPS_V2_ENABLED=false
+      - ZDVV_HTTPS_V3_ENABLED=false
       
       # TLS configuration - if using TLS in container
       # - ZDVV_HTTPS_CERT_FILE=/app/server.crt
