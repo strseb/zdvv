@@ -45,18 +45,21 @@ services:
       - ZDVV_LONGITUDE=13.404954
       - ZDVV_CITY=Berlin
       - ZDVV_COUNTRY=Germany
-      
-      # HTTP server configuration
+        # Server configuration
+      # HTTP configuration
+      - ZDVV_HTTP_ENABLED=true
       - ZDVV_HTTP_ADDR=:9090
-      - ZDVV_HTTP_ENABLE_INSECURE_LISTENER=true
-      - ZDVV_HTTP_INSECURE_ADDR=:9090
       - ZDVV_HTTP_ALLOWED_ORIGINS=*
-      - ZDVV_HTTP_HTTP2_ENABLED=true
-      - ZDVV_HTTP_HTTP3_ENABLED=false
+      
+      # HTTPS configuration (disabled in this example)
+      # - ZDVV_HTTPS_ADDR=:8443
+      # - ZDVV_HTTPS_V1_ENABLED=true
+      # - ZDVV_HTTPS_V2_ENABLED=true
+      # - ZDVV_HTTPS_V3_ENABLED=false
       
       # TLS configuration - if using TLS in container
-      # - ZDVV_HTTP_CERT_FILE=/app/server.crt
-      # - ZDVV_HTTP_KEY_FILE=/app/server.key
+      # - ZDVV_HTTPS_CERT_FILE=/app/server.crt
+      # - ZDVV_HTTPS_KEY_FILE=/app/server.key
       
       # For development, can run in insecure mode (not recommended for production)
       - ZDVV_INSECURE=false

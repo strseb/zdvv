@@ -78,26 +78,28 @@ func (c *ProxyConfig) CreateServer(hostname string) common.Server {
 
 // HTTPConfig holds HTTP server specific configuration settings
 type HTTPConfig struct {
-	Addr                 string   `env:"ZDVV_HTTP_ADDR"`
-	CertFile             string   `env:"ZDVV_HTTP_CERT_FILE"`
-	KeyFile              string   `env:"ZDVV_HTTP_KEY_FILE"`
-	InsecureListenAddr   string   `env:"ZDVV_HTTP_INSECURE_ADDR"` // Address for the insecure HTTP listener
-	Hostname             string   `env:"ZDVV_HTTP_HOSTNAME"`      // Hostname for TLS certificate (Let's Encrypt)
-	HTTP2Enabled         bool     `env:"ZDVV_HTTP_HTTP2_ENABLED"`
-	HTTP3Enabled         bool     `env:"ZDVV_HTTP_HTTP3_ENABLED"`
-	EnableInsecureListen bool     `env:"ZDVV_HTTP_ENABLE_INSECURE_LISTENER"` // Flag to enable the insecure HTTP listener
-	AllowedOrigins       []string // No tag, handled manually
+	HTTPAddr       string   `env:"ZDVV_HTTP_ADDR"`        // Address for the plain HTTP listener
+	HTTPSAddr      string   `env:"ZDVV_HTTPS_ADDR"`       // Address for the HTTPS listener
+	CertFile       string   `env:"ZDVV_HTTPS_CERT_FILE"`  // Path to the TLS certificate file
+	KeyFile        string   `env:"ZDVV_HTTPS_KEY_FILE"`   // Path to the TLS key file
+	Hostname       string   `env:"ZDVV_HTTPS_HOSTNAME"`   // Hostname for TLS certificate (Let's Encrypt)
+	HTTPEnabled    bool     `env:"ZDVV_HTTP_ENABLED"`     // Flag to enable the plain HTTP listener
+	HTTPSV1Enabled bool     `env:"ZDVV_HTTPS_V1_ENABLED"` // Enable HTTPS/1.1 support
+	HTTPSV2Enabled bool     `env:"ZDVV_HTTPS_V2_ENABLED"` // Enable HTTPS/2 support
+	HTTPSV3Enabled bool     `env:"ZDVV_HTTPS_V3_ENABLED"` // Enable HTTPS/3 support
+	AllowedOrigins []string // No tag, handled manually
 }
 
 // NewHTTPConfig creates a new HTTPConfig, populating it from environment variables.
 func NewHTTPConfig() (*HTTPConfig, error) {
 	cfg := &HTTPConfig{
-		Addr:                 ":443", // Default will be overridden by env if ZDVV_HTTP_ADDR is set
-		HTTP2Enabled:         true,
-		HTTP3Enabled:         true,
-		EnableInsecureListen: false,   // Default will be overridden by env if ZDVV_HTTP_ENABLE_INSECURE_LISTENER is set
-		InsecureListenAddr:   ":8080", // Default will be overridden by env if ZDVV_HTTP_INSECURE_ADDR is set
-		AllowedOrigins:       []string{"*"},
+		HTTPAddr:       ":80",  // Default HTTP address
+		HTTPSAddr:      ":443", // Default HTTPS address
+		HTTPSV1Enabled: true,   // Default to HTTP/1.1 support enabled
+		HTTPSV2Enabled: true,   // Default to HTTP/2 support enabled
+		HTTPSV3Enabled: true,   // Default to HTTP/3 support enabled
+		HTTPEnabled:    false,  // Default to disabled plain HTTP
+		AllowedOrigins: []string{"*"},
 	}
 
 	// Load tagged fields from environment variables
@@ -124,31 +126,23 @@ func NewHTTPConfig() (*HTTPConfig, error) {
 		}
 	}
 
-	// Validations
-	if strings.TrimSpace(cfg.Addr) == "" {
-		return nil, fmt.Errorf("HTTP address (ZDVV_HTTP_ADDR) must be set and not empty")
-	}
-
-	// ZDVV_HTTP_HOSTNAME cannot be an empty string if set
-	if _, ok := os.LookupEnv("ZDVV_HTTP_HOSTNAME"); ok && strings.TrimSpace(cfg.Hostname) == "" {
-		return nil, fmt.Errorf("ZDVV_HTTP_HOSTNAME cannot be an empty string if set")
-	}
-
 	// If one of CertFile or KeyFile is provided, the other must also be provided.
 	if (cfg.CertFile != "" && cfg.KeyFile == "") || (cfg.CertFile == "" && cfg.KeyFile != "") {
-		return nil, fmt.Errorf("both ZDVV_HTTP_CERT_FILE and ZDVV_HTTP_KEY_FILE must be set if HTTPS is to be enabled, or neither should be set")
+		return nil, fmt.Errorf("both ZDVV_HTTPS_CERT_FILE and ZDVV_HTTPS_KEY_FILE must be set if HTTPS is to be enabled, or neither should be set")
 	}
 
-	// Validate insecure listener settings
-	if cfg.EnableInsecureListen {
-		if strings.TrimSpace(cfg.InsecureListenAddr) == "" {
-			return nil, fmt.Errorf("insecure address (ZDVV_HTTP_INSECURE_ADDR) must be set and not empty if insecure listener is enabled")
+	// Validate HTTP listener settings
+	if cfg.HTTPEnabled {
+		if strings.TrimSpace(cfg.HTTPAddr) == "" {
+			return nil, fmt.Errorf("HTTP address (ZDVV_HTTP_ADDR) must be set and not empty if HTTP is enabled")
 		}
 	}
 
-	// If HTTP3 is enabled, and a Hostname is not provided for autocert, then CertFile and KeyFile must be provided.
-	if cfg.HTTP3Enabled && cfg.Hostname == "" && (cfg.CertFile == "" || cfg.KeyFile == "") {
-		return nil, fmt.Errorf("when HTTP/3 is enabled (ZDVV_HTTP_HTTP3_ENABLED is not 'false' or is not set) and ZDVV_HTTP_HOSTNAME is not set for autocert, then ZDVV_HTTP_CERT_FILE and ZDVV_HTTP_KEY_FILE must be provided")
+	// If HTTPS/3 is enabled, and a Hostname is not provided for autocert, then CertFile and KeyFile must be provided.
+	if (cfg.HTTPSV1Enabled || cfg.HTTPSV2Enabled || cfg.HTTPSV3Enabled) &&
+		cfg.Hostname == "" && (cfg.CertFile == "" || cfg.KeyFile == "") {
+		cfg.LogSettings()
+		return nil, fmt.Errorf("when HTTPS is enabled and ZDVV_HTTPS_HOSTNAME is not set for autocert, then ZDVV_HTTPS_CERT_FILE and ZDVV_HTTPS_KEY_FILE must be provided")
 	}
 
 	return cfg, nil
@@ -156,22 +150,31 @@ func NewHTTPConfig() (*HTTPConfig, error) {
 
 // LogSettings logs the HTTP-specific configuration settings
 func (c *HTTPConfig) LogSettings() {
-	log.Printf("HTTP Listen Address: %s", c.Addr)
+	log.Printf("HTTPS Listen Address: %s", c.HTTPSAddr)
+	if c.HTTPEnabled {
+		log.Printf("HTTP Listen Address: %s", c.HTTPAddr)
+	} else {
+		log.Println("HTTP Server: Disabled")
+	}
 	log.Printf("TLS Certificate File: %s", c.CertFile)
 	log.Printf("TLS Key File: %s", c.KeyFile)
 	if c.Hostname != "" {
 		log.Printf("TLS Hostname (Let's Encrypt): %s", c.Hostname)
 	}
-	if c.HTTP2Enabled {
-		log.Println("HTTP/2 Support: Enabled")
+	if c.HTTPSV1Enabled {
+		log.Println("HTTPS/1.1 Support: Enabled")
 	} else {
-		log.Println("HTTP/2 Support: Disabled")
+		log.Println("HTTPS/1.1 Support: Disabled")
 	}
-	if c.HTTP3Enabled {
-		log.Println("HTTP/3 Support: Enabled")
+	if c.HTTPSV2Enabled {
+		log.Println("HTTPS/2 Support: Enabled")
 	} else {
-		log.Println("HTTP/3 Support: Disabled")
+		log.Println("HTTPS/2 Support: Disabled")
+	}
+	if c.HTTPSV3Enabled {
+		log.Println("HTTPS/3 Support: Enabled")
+	} else {
+		log.Println("HTTPS/3 Support: Disabled")
 	}
 	log.Printf("Allowed CORS Origins: %s", strings.Join(c.AllowedOrigins, ", "))
-	// Logging for insecure listener will be handled by the server logic based on global insecure flag.
 }

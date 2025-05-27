@@ -79,14 +79,15 @@ The service can be configured using environment variables:
 | `ZDVV_SUPPORTS_CONNECT_TCP` | Whether the proxy supports CONNECT TCP | `true` |
 | `ZDVV_SUPPORTS_CONNECT_UDP` | Whether the proxy supports CONNECT UDP | `false` |
 | `ZDVV_SUPPORTS_CONNECT_IP` | Whether the proxy supports CONNECT IP | `false` |
-| `ZDVV_HTTP_ADDR` | HTTP listen address | `:443` |
-| `ZDVV_HTTP_CERT_FILE` | Path to the TLS certificate file |  |
-| `ZDVV_HTTP_KEY_FILE` | Path to the TLS key file |  |
-| `ZDVV_HTTP_HOSTNAME` | Hostname for TLS certificate (Let's Encrypt) |  |
-| `ZDVV_HTTP_HTTP2_ENABLED` | Enable HTTP/2 support | `true` |
-| `ZDVV_HTTP_HTTP3_ENABLED` | Enable HTTP/3 support | `true` |
-| `ZDVV_HTTP_ENABLE_INSECURE_LISTENER` | Enable the insecure HTTP listener | `false` |
-| `ZDVV_HTTP_INSECURE_ADDR` | Address for the insecure HTTP listener | `:8080` |
+| `ZDVV_HTTPS_ADDR` | HTTPS listen address | `:443` |
+| `ZDVV_HTTP_ADDR` | HTTP listen address (when enabled) | `:8080` |
+| `ZDVV_HTTP_ENABLED` | Enable plain HTTP listener | `false` |
+| `ZDVV_HTTPS_CERT_FILE` | Path to the TLS certificate file |  |
+| `ZDVV_HTTPS_KEY_FILE` | Path to the TLS key file |  |
+| `ZDVV_HTTPS_HOSTNAME` | Hostname for TLS certificate (Let's Encrypt) |  |
+| `ZDVV_HTTPS_V1_ENABLED` | Enable HTTPS/1.1 support | `true` |
+| `ZDVV_HTTPS_V2_ENABLED` | Enable HTTPS/2 support | `true` |
+| `ZDVV_HTTPS_V3_ENABLED` | Enable HTTPS/3 (QUIC) support | `true` |
 | `ZDVV_HTTP_ALLOWED_ORIGINS` | Comma-separated list of allowed CORS origins | `*` |
 
 ## Security Notes
@@ -94,10 +95,3 @@ The service can be configured using environment variables:
 - TLS enabled by default with ALPN (http/1.1, h2, h3)
 - ADMIN_TOKEN for /revoke endpoint stored as environment variable or config
 - No persistent state required
-
-## Future Additions
-
-- MASQUE CONNECT-UDP support
-- Revocation list with TTL or persistent backend
-- Rate limiting and logging
-- Admin UI for viewing revoked tokens
