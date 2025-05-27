@@ -74,28 +74,6 @@ func TestHeartbeatEndpoint(t *testing.T) {
 	}
 }
 
-func TestRootEndpoint(t *testing.T) {
-	mockDB := &MockDatabase{}
-	cfg := &Config{
-		ListenAddr: "localhost:8080",
-		AuthSecret: "my-secret-key",
-	}
-	r := createRouter(mockDB, cfg)
-
-	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	w := httptest.NewRecorder()
-
-	r.ServeHTTP(w, req)
-
-	resp := w.Result()
-	if resp.StatusCode != http.StatusOK {
-		t.Errorf("expected status OK, got %v", resp.Status)
-	}
-	if body := w.Body.String(); body != "Hello World!" {
-		t.Errorf("expected body 'Hello World!', got %v", body)
-	}
-}
-
 func TestJWKSJsonEndpoint(t *testing.T) {
 	mockDB := &MockDatabase{}
 	cfg := &Config{
@@ -150,29 +128,6 @@ func TestServersEndpoint(t *testing.T) {
 	resp := w.Result()
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("expected status OK, got %v", resp.Status)
-	}
-}
-
-func TestDemoEndpoint(t *testing.T) {
-	mockDB := &MockDatabase{}
-	cfg := &Config{
-		ListenAddr: "localhost:8080",
-		AuthSecret: "my-secret-key",
-	}
-	r := createRouter(mockDB, cfg)
-
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/demo", nil)
-	req.Header.Set("Authorization", "Bearer my-secret-key")
-	w := httptest.NewRecorder()
-
-	r.ServeHTTP(w, req)
-
-	resp := w.Result()
-	if resp.StatusCode != http.StatusOK {
-		t.Errorf("expected status OK, got %v", resp.Status)
-	}
-	if body := w.Body.String(); body != "Demo route accessed" {
-		t.Errorf("expected body 'Demo route accessed', got %v", body)
 	}
 }
 

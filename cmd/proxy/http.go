@@ -71,6 +71,24 @@ func getTLSConfig(cfg *HTTPConfig) (*tls.Config, bool, error) {
 // CreateHTTPServers starts the HTTPS and potentially a plain HTTP server based on the provided configuration and handler.
 // It also handles HTTP/3 if enabled in the config.
 func CreateHTTPServers(httpCfg *HTTPConfig, mainHandler http.Handler, globalInsecureMode bool) {
+	// Start plain HTTP listener if enabled
+	if httpCfg.HTTPEnabled {
+		go func() {
+			log.Printf("Starting plain HTTP server on %s", httpCfg.HTTPAddr)
+			httpServer := &http.Server{
+				Addr:    httpCfg.HTTPAddr,
+				Handler: mainHandler,
+			}
+			if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				log.Printf("Plain HTTP server error: %v", err)
+			}
+		}()
+	}
+	if !(httpCfg.HTTPSV1Enabled || httpCfg.HTTPSV2Enabled || httpCfg.HTTPSV3Enabled) {
+		log.Println("No HTTPS protocols enabled.")
+		return
+	}
+
 	tlsConfig, usingAutocert, err := getTLSConfig(httpCfg)
 	if err != nil {
 		log.Fatalf("Failed to get TLS config for HTTPS server: %v", err)
@@ -102,20 +120,6 @@ func CreateHTTPServers(httpCfg *HTTPConfig, mainHandler http.Handler, globalInse
 			}
 			if h3Err != nil {
 				log.Printf("HTTPS/3 server error: %v", h3Err)
-			}
-		}()
-	}
-
-	// Start plain HTTP listener if enabled
-	if httpCfg.HTTPEnabled {
-		go func() {
-			log.Printf("Starting plain HTTP server on %s", httpCfg.HTTPAddr)
-			httpServer := &http.Server{
-				Addr:    httpCfg.HTTPAddr,
-				Handler: mainHandler,
-			}
-			if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-				log.Printf("Plain HTTP server error: %v", err)
 			}
 		}()
 	}
