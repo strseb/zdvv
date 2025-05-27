@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/basti/zdvv/pkg/common"
+	"github.com/strseb/zdvv/pkg/common"
 )
 
 // TestServersEndpointPrivacy tests that the /api/v1/servers endpoint doesn't expose private fields like revocation tokens

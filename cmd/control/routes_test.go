@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/basti/zdvv/pkg/common"
+	"github.com/strseb/zdvv/pkg/common"
 )
 
 // MockDatabase is a mock implementation of the Database interface.

@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/basti/zdvv/pkg/common"
+	"github.com/strseb/zdvv/pkg/common"
 )
 
 // TestServerManagementEndpoints tests the server management endpoints (/api/v1/server)

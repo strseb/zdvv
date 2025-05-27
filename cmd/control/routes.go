@@ -11,10 +11,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/basti/zdvv/pkg/common"
-	"github.com/basti/zdvv/pkg/common/auth"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/strseb/zdvv/pkg/common"
+	"github.com/strseb/zdvv/pkg/common/auth"
 )
 
 func createRouter(db Database, cfg *Config) *chi.Mux {

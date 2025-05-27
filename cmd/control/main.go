@@ -10,8 +10,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/basti/zdvv/pkg/common"
 	"github.com/redis/go-redis/v9"
+	"github.com/strseb/zdvv/pkg/common"
 )
 
 type Config struct {

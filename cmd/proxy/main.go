@@ -7,8 +7,8 @@ package main
 import (
 	"log"
 
-	"github.com/basti/zdvv/pkg/common"
-	"github.com/basti/zdvv/pkg/common/auth"
+	"github.com/strseb/zdvv/pkg/common"
+	"github.com/strseb/zdvv/pkg/common/auth"
 )
 
 const (

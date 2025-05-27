@@ -15,7 +15,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/basti/zdvv/pkg/common"
+	"github.com/strseb/zdvv/pkg/common"
 )
 
 /**

@@ -7,7 +7,7 @@ package control
 import (
 	"fmt"
 
-	"github.com/basti/zdvv/pkg/common"
+	"github.com/strseb/zdvv/pkg/common"
 )
 
 // TestConfig holds the configuration for integration tests

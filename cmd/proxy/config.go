@@ -11,7 +11,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/basti/zdvv/pkg/common"
+	"github.com/strseb/zdvv/pkg/common"
 )
 
 // Config holds all application configuration settings

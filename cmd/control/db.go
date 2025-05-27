@@ -10,8 +10,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/basti/zdvv/pkg/common"
 	"github.com/redis/go-redis/v9"
+	"github.com/strseb/zdvv/pkg/common"
 )
 
 // Database defines an interface for database operations.

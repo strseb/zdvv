@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/basti/zdvv/pkg/common/auth"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/strseb/zdvv/pkg/common/auth"
 )
 
 func TestJWTKeySignWithClaims(t *testing.T) {
