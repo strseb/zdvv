@@ -42,7 +42,7 @@ func (m *MockDatabase) GetAllActiveJWTKeys() ([]*common.JWTKey, error) {
 		{
 			Kty:       "RSA",
 			PublicKey: "test-public-key",
-			Kid:       123,
+			Kid:       "123",
 			ExpiresAt: 9999999999,
 		},
 	}, nil
@@ -139,27 +139,75 @@ func TestAddServerEndpoint(t *testing.T) {
 	}
 	r := createRouter(mockDB, cfg)
 
-	server := `{
-		"proxyUrl": "http://example.com",
-		"latitude": 12.34,
-		"longitude": 56.78,
-		"city": "TestCity",
-		"country": "TestCountry",
-		"supportsConnectTcp": true,
-		"supportsConnectUdp": false,
-		"supportsConnectIp": true
-	}`
+	// Test valid server
+	t.Run("Valid server data", func(t *testing.T) {
+		server := `{
+			"proxyUrl": "http://example.com",
+			"latitude": 12.34,
+			"longitude": 56.78,
+			"city": "TestCity",
+			"country": "TestCountry",
+			"supportsConnectTcp": true,
+			"supportsConnectUdp": false,
+			"supportsConnectIp": true
+		}`
 
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/server", strings.NewReader(server))
-	req.Header.Set("Authorization", "Bearer my-secret-key")
-	w := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/server", strings.NewReader(server))
+		req.Header.Set("Authorization", "Bearer my-secret-key")
+		w := httptest.NewRecorder()
 
-	r.ServeHTTP(w, req)
+		r.ServeHTTP(w, req)
 
-	resp := w.Result()
-	if resp.StatusCode != http.StatusOK {
-		t.Errorf("expected status OK, got %v", resp.Status)
-	}
+		resp := w.Result()
+		if resp.StatusCode != http.StatusOK {
+			t.Errorf("expected status OK, got %v", resp.Status)
+		}
+	})
+
+	// Test invalid server - missing ProxyURL
+	t.Run("Invalid server data - missing ProxyURL", func(t *testing.T) {
+		server := `{
+			"latitude": 12.34,
+			"longitude": 56.78,
+			"city": "TestCity",
+			"country": "TestCountry",
+			"supportsConnectTcp": true
+		}`
+
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/server", strings.NewReader(server))
+		req.Header.Set("Authorization", "Bearer my-secret-key")
+		w := httptest.NewRecorder()
+
+		r.ServeHTTP(w, req)
+
+		resp := w.Result()
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Errorf("expected status BadRequest, got %v", resp.Status)
+		}
+	})
+
+	// Test invalid server - invalid latitude
+	t.Run("Invalid server data - invalid latitude", func(t *testing.T) {
+		server := `{
+			"proxyUrl": "http://example.com",
+			"latitude": 91.34,
+			"longitude": 56.78,
+			"city": "TestCity",
+			"country": "TestCountry",
+			"supportsConnectTcp": true
+		}`
+
+		req := httptest.NewRequest(http.MethodPost, "/api/v1/server", strings.NewReader(server))
+		req.Header.Set("Authorization", "Bearer my-secret-key")
+		w := httptest.NewRecorder()
+
+		r.ServeHTTP(w, req)
+
+		resp := w.Result()
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Errorf("expected status BadRequest, got %v", resp.Status)
+		}
+	})
 }
 
 func TestRemoveServerEndpoint(t *testing.T) {

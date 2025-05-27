@@ -95,7 +95,7 @@ func NewJWTKey() (*JWTKey, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Generate a random key ID as a string
 	kidInt, err := rand.Int(rand.Reader, big.NewInt(1<<63-1))
 	if err != nil {
@@ -119,4 +119,38 @@ func (s *Server) GenerateRevocationToken() (string, error) {
 	}
 	s.RevocationToken = base64.URLEncoding.EncodeToString(tokenBytes)
 	return s.RevocationToken, nil
+}
+
+// IsValid checks if the server has valid required data
+func (s *Server) IsValid() (bool, string) {
+	// Check for required fields
+	if s.ProxyURL == "" {
+		return false, "proxyUrl is required"
+	}
+
+	// Validate latitude range (-90 to 90)
+	if s.Latitude < -90 || s.Latitude > 90 {
+		return false, "latitude must be between -90 and 90"
+	}
+
+	// Validate longitude range (-180 to 180)
+	if s.Longitude < -180 || s.Longitude > 180 {
+		return false, "longitude must be between -180 and 180"
+	}
+
+	// Check if city and country are provided
+	if s.City == "" {
+		return false, "city is required"
+	}
+
+	if s.Country == "" {
+		return false, "country is required"
+	}
+
+	// Check that at least one connection type is supported
+	if !s.SupportsConnectTCP && !s.SupportsConnectUDP && !s.SupportsConnectIP {
+		return false, "at least one connection type must be supported"
+	}
+
+	return true, ""
 }

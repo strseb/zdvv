@@ -7,7 +7,7 @@ The server can be configured using environment variables. Below are the availabl
 
 | Environment Variable       | Default Value         | Description                          |
 |----------------------------|-----------------------|--------------------------------------|
-| `ZDVV_PORT`                | `localhost:8080`      | The address the server listens on.   |
+| `ZDVV_LISTEN_ADDR`                | `localhost:8080`      | The address the server listens on.   |
 | `ZDVV_REDIS_ADDR`          | `localhost:6379`      | The Redis server address.            |
 | `ZDVV_REDIS_PASSWORD`      | `""`                 | The Redis server password.           |
 | `ZDVV_REDIS_DB`            | `0`                   | The Redis database index.            |

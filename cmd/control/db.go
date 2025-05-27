@@ -93,7 +93,7 @@ func (r *RedisDatabase) PutJWTKey(val *common.JWTKey) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 	defer cancel()
 
-	key := fmt.Sprintf("kid:%d", val.Kid)
+	key := fmt.Sprintf("kid:%s", val.Kid)
 	data := map[string]interface{}{
 		"kty":       val.Kty,
 		"publicKey": val.PublicKey,

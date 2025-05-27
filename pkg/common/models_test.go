@@ -80,3 +80,139 @@ func TestJWTKeySignWithClaims(t *testing.T) {
 		t.Fatalf("Expected kid to be a number, got %T", kid)
 	}
 }
+
+// TestServerIsValid tests the IsValid method of the Server struct
+func TestServerIsValid(t *testing.T) {
+	tests := []struct {
+		name          string
+		server        Server
+		expectValid   bool
+		expectedError string
+	}{
+		{
+			name: "Valid server",
+			server: Server{
+				ProxyURL:           "https://example.com",
+				Latitude:           45.0,
+				Longitude:          90.0,
+				City:               "Test City",
+				Country:            "TC",
+				SupportsConnectTCP: true,
+			},
+			expectValid:   true,
+			expectedError: "",
+		},
+		{
+			name: "Missing ProxyURL",
+			server: Server{
+				Latitude:           45.0,
+				Longitude:          90.0,
+				City:               "Test City",
+				Country:            "TC",
+				SupportsConnectTCP: true,
+			},
+			expectValid:   false,
+			expectedError: "proxyUrl is required",
+		},
+		{
+			name: "Invalid latitude (too high)",
+			server: Server{
+				ProxyURL:           "https://example.com",
+				Latitude:           95.0,
+				Longitude:          90.0,
+				City:               "Test City",
+				Country:            "TC",
+				SupportsConnectTCP: true,
+			},
+			expectValid:   false,
+			expectedError: "latitude must be between -90 and 90",
+		},
+		{
+			name: "Invalid latitude (too low)",
+			server: Server{
+				ProxyURL:           "https://example.com",
+				Latitude:           -91.0,
+				Longitude:          90.0,
+				City:               "Test City",
+				Country:            "TC",
+				SupportsConnectTCP: true,
+			},
+			expectValid:   false,
+			expectedError: "latitude must be between -90 and 90",
+		},
+		{
+			name: "Invalid longitude (too high)",
+			server: Server{
+				ProxyURL:           "https://example.com",
+				Latitude:           45.0,
+				Longitude:          181.0,
+				City:               "Test City",
+				Country:            "TC",
+				SupportsConnectTCP: true,
+			},
+			expectValid:   false,
+			expectedError: "longitude must be between -180 and 180",
+		},
+		{
+			name: "Invalid longitude (too low)",
+			server: Server{
+				ProxyURL:           "https://example.com",
+				Latitude:           45.0,
+				Longitude:          -181.0,
+				City:               "Test City",
+				Country:            "TC",
+				SupportsConnectTCP: true,
+			},
+			expectValid:   false,
+			expectedError: "longitude must be between -180 and 180",
+		},
+		{
+			name: "Missing city",
+			server: Server{
+				ProxyURL:           "https://example.com",
+				Latitude:           45.0,
+				Longitude:          90.0,
+				Country:            "TC",
+				SupportsConnectTCP: true,
+			},
+			expectValid:   false,
+			expectedError: "city is required",
+		},
+		{
+			name: "Missing country",
+			server: Server{
+				ProxyURL:           "https://example.com",
+				Latitude:           45.0,
+				Longitude:          90.0,
+				City:               "Test City",
+				SupportsConnectTCP: true,
+			},
+			expectValid:   false,
+			expectedError: "country is required",
+		},
+		{
+			name: "No connection types supported",
+			server: Server{
+				ProxyURL:  "https://example.com",
+				Latitude:  45.0,
+				Longitude: 90.0,
+				City:      "Test City",
+				Country:   "TC",
+			},
+			expectValid:   false,
+			expectedError: "at least one connection type must be supported",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			valid, message := tc.server.IsValid()
+			if valid != tc.expectValid {
+				t.Errorf("Expected valid=%v, got %v", tc.expectValid, valid)
+			}
+			if message != tc.expectedError {
+				t.Errorf("Expected message=%q, got %q", tc.expectedError, message)
+			}
+		})
+	}
+}

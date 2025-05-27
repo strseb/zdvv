@@ -128,6 +128,12 @@ func createRouter(db Database, cfg *Config) *chi.Mux {
 					return
 				}
 
+				// Validate the server object
+				if valid, message := server.IsValid(); !valid {
+					http.Error(w, message, http.StatusBadRequest)
+					return
+				}
+
 				revocationToken, err := server.GenerateRevocationToken()
 				if err != nil {
 					http.Error(w, "Failed to generate revocation token", http.StatusInternalServerError)
