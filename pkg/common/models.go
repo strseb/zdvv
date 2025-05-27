@@ -27,13 +27,12 @@ type Server struct {
 	// SupportsConnectUDP indicates if the server supports the Connect UDP feature (RFC 9298).
 	SupportsConnectUDP bool `json:"supportsConnectUdp"`
 	// SupportsConnectIP indicates if the server supports the Connect IP feature (RFC 9484).
-	SupportsConnectIP bool `json:"supportsConnectIp"`
-	/*
+	SupportsConnectIP bool `json:"supportsConnectIp"` /*
 	* A server can only be revoked by itself.
 	* We will send this to the server when it registers.
 	* The server will then use this token to revoke itself.
 	 */
-	RevocationToken string
+	RevocationToken string `json:"-"` // The - means this field will be ignored during JSON serialization
 }
 
 type JWTKey struct {

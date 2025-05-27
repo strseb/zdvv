@@ -100,6 +100,7 @@ func createRouter(db Database, cfg *Config) *chi.Mux {
 					log.Printf("Error retrieving servers: %v", err)
 					return
 				}
+
 				w.Header().Set("Content-Type", "application/json")
 				json.NewEncoder(w).Encode(map[string]interface{}{
 					"servers": servers,
