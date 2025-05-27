@@ -18,16 +18,6 @@ A Go-based HTTP/2 and HTTP/3 proxy service.
 - ✅ **HTTP CONNECT Proxy**
   - Full support for HTTP/1.1, HTTP/2, and HTTP/3 (QUIC)
 
-- ✅ **JWT-based Authentication**
-  - Incoming requests must include `Proxy-Authorization: Bearer <token>`
-  - Token must have a `jti` (JWT ID) claim
-
-- ✅ **TLS Support**
-  - Single server instance handles all 3 protocols using ALPN
-
-- ✅ **OPS Unikernel Compatible**
-  - Easily packaged and deployed as a unikernel
-
 ## Usage
 
 Client connects through proxy:
@@ -49,18 +39,6 @@ GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o zdvv main.go
 
 ```bash
 ./zdvv
-```
-
-Generate a self-signed certificate if needed:
-
-```bash
-openssl req -x509 -newkey rsa:4096 -keyout server.key -out server.crt -days 365 -nodes
-```
-
-## Run as Unikernel
-
-```bash
-ops run -c config.json zdvv
 ```
 
 ## Configuration
