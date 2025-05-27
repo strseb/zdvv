@@ -11,7 +11,7 @@
  Abteilung ZDVV steht bereit.
 ```
 
-A Go-based HTTP/2 and HTTP/3 proxy service designed with the aesthetics and structure of a formal German authority.
+A Go-based HTTP/2 and HTTP/3 proxy service.
 
 ## Features
 
@@ -22,35 +22,11 @@ A Go-based HTTP/2 and HTTP/3 proxy service designed with the aesthetics and stru
   - Incoming requests must include `Proxy-Authorization: Bearer <token>`
   - Token must have a `jti` (JWT ID) claim
 
-- ✅ **Revocation Endpoint**
-  - Admins can revoke tokens via POST /revoke
-
-- ✅ **In-Memory Revocation List**
-  - No Redis or database required
-
 - ✅ **TLS Support**
   - Single server instance handles all 3 protocols using ALPN
 
 - ✅ **OPS Unikernel Compatible**
   - Easily packaged and deployed as a unikernel
-
-## JWT Revocation API
-
-### Revoke Token
-
-```
-POST /revoke
-Authorization: Bearer <ADMIN_TOKEN>
-Content-Type: application/json
-
-{
-  "jti": "revoked-token-id-123"
-}
-```
-
-- Stores the `jti` in an in-memory set
-- All future requests with that `jti` will be denied
-- Note: revocations are not persisted across restarts
 
 ## Usage
 
@@ -89,18 +65,29 @@ ops run -c config.json zdvv
 
 ## Configuration
 
-The service can be configured using command-line flags or environment variables:
+The service can be configured using environment variables:
 
-| Flag | Environment Variable | Description |
-|------|---------------------|-------------|
-| `-addr` | | Listen address (default: ":8443") |
-| `-cert` | | TLS certificate file (default: "server.crt") |
-| `-key` | | TLS key file (default: "server.key") |
-| `-jwt-secret` | `JWT_SECRET` | JWT secret key (required unless `-insecure` is set) |
-| `-admin-token` | `ADMIN_TOKEN` | Admin API token (required unless `-insecure` is set) |
-| `-no-http2` | | Disable HTTP/2 support (default: false) |
-| `-no-http3` | | Disable HTTP/3 support (default: false) |
-| `-insecure` | | Disable all authentication requirements (insecure, for testing only) |
+| Environment Variable | Description | Default |
+|----------------------|-------------|---------|
+| `ZDVV_INSECURE` | Disable all authentication requirements (insecure, for testing only) | `false` |
+| `ZDVV_CONTROL_SERVER_URL` | URL of the control server |  |
+| `ZDVV_CONTROL_SERVER_SHARED_SECRET` | Shared secret for communication with the control server |  |
+| `ZDVV_LATITUDE` | Latitude of the proxy server | `0` |
+| `ZDVV_LONGITUDE` | Longitude of the proxy server | `0` |
+| `ZDVV_CITY` | City of the proxy server | `Unknown` |
+| `ZDVV_COUNTRY` | Country of the proxy server | `Unknown` |
+| `ZDVV_SUPPORTS_CONNECT_TCP` | Whether the proxy supports CONNECT TCP | `true` |
+| `ZDVV_SUPPORTS_CONNECT_UDP` | Whether the proxy supports CONNECT UDP | `false` |
+| `ZDVV_SUPPORTS_CONNECT_IP` | Whether the proxy supports CONNECT IP | `false` |
+| `ZDVV_HTTP_ADDR` | HTTP listen address | `:443` |
+| `ZDVV_HTTP_CERT_FILE` | Path to the TLS certificate file |  |
+| `ZDVV_HTTP_KEY_FILE` | Path to the TLS key file |  |
+| `ZDVV_HTTP_HOSTNAME` | Hostname for TLS certificate (Let's Encrypt) |  |
+| `ZDVV_HTTP_HTTP2_ENABLED` | Enable HTTP/2 support | `true` |
+| `ZDVV_HTTP_HTTP3_ENABLED` | Enable HTTP/3 support | `true` |
+| `ZDVV_HTTP_ENABLE_INSECURE_LISTENER` | Enable the insecure HTTP listener | `false` |
+| `ZDVV_HTTP_INSECURE_ADDR` | Address for the insecure HTTP listener | `:8080` |
+| `ZDVV_HTTP_ALLOWED_ORIGINS` | Comma-separated list of allowed CORS origins | `*` |
 
 ## Security Notes
 

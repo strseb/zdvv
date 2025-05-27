@@ -8,11 +8,19 @@ services:
     ports:
       - "8080:8080"
     environment:
+      # Control server settings
       - ZDVV_PORT=8080
       - ZDVV_REDIS_ADDR=redis:6379
       - ZDVV_REDIS_PASSWORD=
       - ZDVV_REDIS_DB=0
       - ZDVV_AUTH_SECRET=my-secret-key
+      # Additional control server settings might be needed based on its implementation
+      # - ZDVV_JWT_EXPIRY=24h
+      # - ZDVV_JWKS_CACHE_DURATION=1h
+    volumes:
+      # Mount certificates if needed
+      - ./server.crt:/app/server.crt
+      - ./server.key:/app/server.key
     depends_on:
       - redis
 
@@ -23,7 +31,39 @@ services:
     ports:
       - "9090:9090"
     environment:
-      - PROXY_CONFIG=config.json
+      # Control server connection settings
+      - ZDVV_CONTROL_SERVER_URL=http://control:8080
+      - ZDVV_CONTROL_SERVER_SHARED_SECRET=my-secret-key
+      
+      # Proxy server capabilities
+      - ZDVV_SUPPORTS_CONNECT_TCP=true
+      - ZDVV_SUPPORTS_CONNECT_UDP=false
+      - ZDVV_SUPPORTS_CONNECT_IP=false
+      
+      # Location information (can be customized)
+      - ZDVV_LATITUDE=52.520008
+      - ZDVV_LONGITUDE=13.404954
+      - ZDVV_CITY=Berlin
+      - ZDVV_COUNTRY=Germany
+      
+      # HTTP server configuration
+      - ZDVV_HTTP_ADDR=:9090
+      - ZDVV_HTTP_ENABLE_INSECURE_LISTENER=true
+      - ZDVV_HTTP_INSECURE_ADDR=:9090
+      - ZDVV_HTTP_ALLOWED_ORIGINS=*
+      - ZDVV_HTTP_HTTP2_ENABLED=true
+      - ZDVV_HTTP_HTTP3_ENABLED=false
+      
+      # TLS configuration - if using TLS in container
+      # - ZDVV_HTTP_CERT_FILE=/app/server.crt
+      # - ZDVV_HTTP_KEY_FILE=/app/server.key
+      
+      # For development, can run in insecure mode (not recommended for production)
+      - ZDVV_INSECURE=false
+    volumes:
+      # Mount certificates if needed
+      - ./server.crt:/app/server.crt
+      - ./server.key:/app/server.key
     depends_on:
       - control
 
@@ -33,3 +73,9 @@ services:
     ports:
       - "6379:6379"
     command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+
+volumes:
+  redis_data:
+    driver: local
